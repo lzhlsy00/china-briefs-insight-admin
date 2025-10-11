@@ -15,6 +15,8 @@ model News {
   content   String?  @map("content")
   aiWorth   Boolean? @map("ai_worth")
   aiReason  String?  @map("ai_reason")
+  aiReasonEn String? @map("ai_reason_en")
+  aiReasonKo String? @map("ai_reason_ko")
   translationKo String? @map("translation-ko")
   translationEn String? @map("translation-en")
   titleKo   String?  @map("title-ko")
