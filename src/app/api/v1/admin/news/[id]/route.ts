@@ -12,9 +12,15 @@ type RouteContext = {
   }>;
 };
 
-const WEBHOOK_URL = 'https://automation.hifortune.pro/webhook/f0792549-6062-45b6-83e3-df4ecbeaf4b7';
+const WEBHOOK_URL = process.env.PUBLISH_WEBHOOK_URL || '';
 
 const notifyPublishWebhook = async (news: News) => {
+  // 如果没有配置 webhook URL，跳过通知
+  if (!WEBHOOK_URL) {
+    console.warn('⚠️ PUBLISH_WEBHOOK_URL 未配置，跳过 webhook 通知');
+    return;
+  }
+
   try {
     const response = await fetch(WEBHOOK_URL, {
       method: 'POST',
@@ -22,9 +28,26 @@ const notifyPublishWebhook = async (news: News) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        // 基本信息
         id: news.id,
         title: news.title,
+        isoDate: news.isoDate.toISOString(),
+        link: news.link,
         content: news.content,
+        category: news.category,
+        status: news.status,
+        
+        // AI 分析
+        aiWorth: news.aiWorth,
+        aiReason: news.aiReason,
+        aiReasonEn: news.aiReasonEn,
+        aiReasonKo: news.aiReasonKo,
+        
+        // 多语言翻译
+        translationKo: news.translationKo,
+        translationEn: news.translationEn,
+        titleKo: news.titleKo,
+        titleEn: news.titleEn,
       }),
     });
 
@@ -32,6 +55,8 @@ const notifyPublishWebhook = async (news: News) => {
       console.error(
         `发布状态 webhook 调用失败: ${response.status} ${response.statusText}`,
       );
+    } else {
+      console.log(`✅ Webhook 通知成功: News ID ${news.id} 已发布`);
     }
   } catch (error) {
     console.error('发布状态 webhook 调用异常:', error);

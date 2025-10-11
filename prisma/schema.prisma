@@ -23,6 +23,8 @@ model News {
   titleEn   String?  @map("title-en")
   category  String?  @db.VarChar(100)
   status    String   @default("DRAFT") @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("news")
 }
