@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { handleRouteError } from '@/lib/api/error';
 import { successResponse } from '@/lib/api/response';
 import { serializeNewsList } from '@/lib/api/serializers';
@@ -7,13 +7,19 @@ const TAKE_LIMIT = 10;
 
 export const GET = async () => {
   try {
-    const pending = await prisma.news.findMany({
-      where: { aiWorth: null },
-      take: TAKE_LIMIT,
-      orderBy: { id: 'asc' },
-    });
+    // 获取待评估的新闻
+    const { data: pending, error } = await supabase
+      .from('news')
+      .select('*')
+      .is('ai_worth', null)
+      .order('id', { ascending: true })
+      .limit(TAKE_LIMIT);
 
-    if (pending.length === 0) {
+    if (error) {
+      throw error;
+    }
+
+    if (!pending || pending.length === 0) {
       return successResponse(
         {
           news: [],
@@ -25,14 +31,18 @@ export const GET = async () => {
       );
     }
 
-    const totalPending = await prisma.news.count({ where: { aiWorth: null } });
+    // 获取总数
+    const { count: totalPending } = await supabase
+      .from('news')
+      .select('*', { count: 'exact', head: true })
+      .is('ai_worth', null);
 
     return successResponse(
       {
         news: serializeNewsList(pending),
         count: pending.length,
-        totalPending,
-        hasMore: totalPending > TAKE_LIMIT,
+        totalPending: totalPending || 0,
+        hasMore: (totalPending || 0) > TAKE_LIMIT,
       },
       { message: `找到 ${pending.length} 条待评估新闻` }
     );

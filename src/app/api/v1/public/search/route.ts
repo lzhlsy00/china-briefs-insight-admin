@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { handleRouteError } from '@/lib/api/error';
 import { successResponse } from '@/lib/api/response';
 import { serializeNewsList } from '@/lib/api/serializers';
@@ -27,43 +27,30 @@ export const GET = async (request: NextRequest) => {
     }
 
     const query = parsed.data;
-    const skip = (query.page - 1) * query.limit;
+    const from = (query.page - 1) * query.limit;
+    const to = from + query.limit - 1;
 
-    const where = {
-      status: 'PUBLISH' as const,
-      OR: [
-        {
-          title: {
-            contains: query.q,
-            mode: 'insensitive' as const,
-          },
-        },
-        {
-          content: {
-            contains: query.q,
-            mode: 'insensitive' as const,
-          },
-        },
-      ],
-    };
+    // 使用 Supabase 搜索（title 或 content 包含关键词）
+    const { data: news, error, count: total } = await supabase
+      .from('news')
+      .select('*', { count: 'exact' })
+      .eq('status', 'PUBLISH')
+      .or(`title.ilike.%${query.q}%,content.ilike.%${query.q}%`)
+      .order('iso_date', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to);
 
-    const [total, news] = await Promise.all([
-      prisma.news.count({ where }),
-      prisma.news.findMany({
-        where,
-        skip,
-        take: query.limit,
-        orderBy: [{ isoDate: 'desc' }, { id: 'desc' }],
-      }),
-    ]);
+    if (error) {
+      throw error;
+    }
 
-    const serialized = serializeNewsList(news).map(({ aiReason: _aiReason, status: _status, ...rest }) => {
+    const serialized = serializeNewsList(news || []).map(({ aiReason: _aiReason, status: _status, ...rest }) => {
       void _aiReason;
       void _status;
       return { ...rest };
     });
 
-    const totalPages = query.limit > 0 ? Math.ceil(total / query.limit) : 0;
+    const totalPages = query.limit > 0 && total ? Math.ceil(total / query.limit) : 0;
 
     const response = successResponse({
       news: serialized,
@@ -71,7 +58,7 @@ export const GET = async (request: NextRequest) => {
         current: query.page,
         total: totalPages,
         count: serialized.length,
-        totalCount: total,
+        totalCount: total || 0,
         hasNext: query.page < totalPages,
         hasPrev: query.page > 1,
       },

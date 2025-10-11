@@ -1,10 +1,29 @@
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { handleRouteError } from '@/lib/api/error';
 import { errorResponse, successResponse } from '@/lib/api/response';
 import { serializeNews } from '@/lib/api/serializers';
-import { Prisma, type News } from '@prisma/client';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
+
+type News = {
+  id: number;
+  title: string;
+  iso_date: string;
+  link: string;
+  content: string | null;
+  ai_worth: boolean | null;
+  ai_reason: string | null;
+  ai_reason_en: string | null;
+  ai_reason_ko: string | null;
+  'translation-ko': string | null;
+  'translation-en': string | null;
+  'title-ko': string | null;
+  'title-en': string | null;
+  category: string | null;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+};
 
 type RouteContext = {
   params: Promise<{
@@ -31,23 +50,23 @@ const notifyPublishWebhook = async (news: News) => {
         // 基本信息
         id: news.id,
         title: news.title,
-        isoDate: news.isoDate.toISOString(),
+        isoDate: news.iso_date,
         link: news.link,
         content: news.content,
         category: news.category,
         status: news.status,
         
         // AI 分析
-        aiWorth: news.aiWorth,
-        aiReason: news.aiReason,
-        aiReasonEn: news.aiReasonEn,
-        aiReasonKo: news.aiReasonKo,
+        aiWorth: news.ai_worth,
+        aiReason: news.ai_reason,
+        aiReasonEn: news.ai_reason_en,
+        aiReasonKo: news.ai_reason_ko,
         
         // 多语言翻译
-        translationKo: news.translationKo,
-        translationEn: news.translationEn,
-        titleKo: news.titleKo,
-        titleEn: news.titleEn,
+        translationKo: news['translation-ko'],
+        translationEn: news['translation-en'],
+        titleKo: news['title-ko'],
+        titleEn: news['title-en'],
       }),
     });
 
@@ -92,15 +111,15 @@ const updateSchema = z
 
 type UpdateInput = z.infer<typeof updateSchema>;
 
-const buildUpdateData = (input: UpdateInput): Prisma.NewsUpdateInput => {
-  const data: Prisma.NewsUpdateInput = {};
+const buildUpdateData = (input: UpdateInput): Record<string, unknown> => {
+  const data: Record<string, unknown> = {};
 
   if (input.title !== undefined) data.title = input.title;
-  if (input.isoDate !== undefined) data.isoDate = new Date(input.isoDate);
+  if (input.isoDate !== undefined) data.iso_date = input.isoDate;
   if (input.link !== undefined) data.link = input.link;
   if (input.content !== undefined) data.content = input.content ?? null;
-  if (input.aiWorth !== undefined) data.aiWorth = input.aiWorth ?? null;
-  if (input.aiReason !== undefined) data.aiReason = input.aiReason ?? null;
+  if (input.aiWorth !== undefined) data.ai_worth = input.aiWorth ?? null;
+  if (input.aiReason !== undefined) data.ai_reason = input.aiReason ?? null;
   if (input.category !== undefined) data.category = input.category ?? null;
   if (input.status !== undefined) data.status = input.status;
 
@@ -116,11 +135,13 @@ export const GET = async (_request: NextRequest, context: RouteContext) => {
   try {
     const id = await parseId(context);
 
-    const news = await prisma.news.findUnique({
-      where: { id },
-    });
+    const { data: news, error } = await supabase
+      .from('news')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!news) {
+    if (error || !news) {
       return errorResponse('新闻不存在', { status: 404 });
     }
 
@@ -136,18 +157,32 @@ export const PUT = async (request: NextRequest, context: RouteContext) => {
     const payload = await request.json();
     const input = updateSchema.parse(payload);
 
-    const existing = await prisma.news.findUnique({ where: { id } });
-    if (!existing) {
+    // 获取现有记录
+    const { data: existing, error: fetchError } = await supabase
+      .from('news')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !existing) {
       return errorResponse('新闻不存在', { status: 404 });
     }
 
-    const updated = await prisma.news.update({
-      where: { id },
-      data: buildUpdateData(input),
-    });
+    // 更新记录
+    const { data: updated, error: updateError } = await supabase
+      .from('news')
+      .update(buildUpdateData(input))
+      .eq('id', id)
+      .select()
+      .single();
 
+    if (updateError || !updated) {
+      throw updateError || new Error('更新失败');
+    }
+
+    // 检查是否需要触发 webhook
     if (existing.status !== 'PUBLISH' && updated.status === 'PUBLISH') {
-      await notifyPublishWebhook(updated);
+      await notifyPublishWebhook(updated as News);
     }
 
     return successResponse(serializeNews(updated), { message: '新闻更新成功' });
@@ -160,12 +195,26 @@ export const DELETE = async (_request: NextRequest, context: RouteContext) => {
   try {
     const id = await parseId(context);
 
-    const existing = await prisma.news.findUnique({ where: { id } });
-    if (!existing) {
+    // 检查记录是否存在
+    const { data: existing, error: fetchError } = await supabase
+      .from('news')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !existing) {
       return errorResponse('新闻不存在', { status: 404 });
     }
 
-    await prisma.news.delete({ where: { id } });
+    // 删除记录
+    const { error: deleteError } = await supabase
+      .from('news')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      throw deleteError;
+    }
 
     return successResponse({ id }, { message: '新闻删除成功' });
   } catch (error) {

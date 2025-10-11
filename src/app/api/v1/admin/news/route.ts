@@ -1,8 +1,7 @@
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { handleRouteError } from '@/lib/api/error';
 import { successResponse } from '@/lib/api/response';
 import { serializeNewsList } from '@/lib/api/serializers';
-import { Prisma } from '@prisma/client';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 
@@ -17,49 +16,6 @@ const querySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
-type AdminNewsQuery = z.infer<typeof querySchema>;
-
-const buildFilters = (query: AdminNewsQuery): Prisma.NewsWhereInput => {
-  const where: Prisma.NewsWhereInput = {};
-
-  if (query.category) {
-    where.category = {
-      contains: query.category,
-      mode: 'insensitive',
-    };
-  }
-
-  if (query.status) {
-    where.status = query.status;
-  }
-
-  if (query.title) {
-    where.title = {
-      contains: query.title,
-      mode: 'insensitive',
-    };
-  }
-
-  if (query.aiWorth !== undefined) {
-    where.aiWorth = query.aiWorth;
-  }
-
-  return where;
-};
-
-const buildOrderBy = (query: AdminNewsQuery): Prisma.NewsOrderByWithRelationInput[] => {
-  if (query.sortBy === 'isoDate') {
-    return [
-      { isoDate: query.sortOrder },
-      { id: query.sortOrder },
-    ];
-  }
-
-  return [
-    { [query.sortBy]: query.sortOrder } as Prisma.NewsOrderByWithRelationInput,
-  ];
-};
-
 export const GET = async (request: NextRequest) => {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -73,28 +29,50 @@ export const GET = async (request: NextRequest) => {
     }
 
     const query = parsed.data;
-    const skip = (query.page - 1) * query.limit;
-    const where = buildFilters(query);
+    const from = (query.page - 1) * query.limit;
+    const to = from + query.limit - 1;
 
-    const [total, news] = await Promise.all([
-      prisma.news.count({ where }),
-      prisma.news.findMany({
-        where,
-        skip,
-        take: query.limit,
-        orderBy: buildOrderBy(query),
-      }),
-    ]);
+    // 构建 Supabase 查询
+    let supabaseQuery = supabase.from('news').select('*', { count: 'exact' });
 
-    const totalPages = query.limit > 0 ? Math.ceil(total / query.limit) : 0;
+    // 应用过滤条件
+    if (query.category) {
+      supabaseQuery = supabaseQuery.ilike('category', `%${query.category}%`);
+    }
+    if (query.status) {
+      supabaseQuery = supabaseQuery.eq('status', query.status);
+    }
+    if (query.title) {
+      supabaseQuery = supabaseQuery.ilike('title', `%${query.title}%`);
+    }
+    if (query.aiWorth !== undefined) {
+      supabaseQuery = supabaseQuery.eq('ai_worth', query.aiWorth);
+    }
+
+    // 排序
+    const sortColumn = query.sortBy === 'isoDate' ? 'iso_date' : 
+                       query.sortBy === 'aiWorth' ? 'ai_worth' : 
+                       query.sortBy;
+    supabaseQuery = supabaseQuery.order(sortColumn, { ascending: query.sortOrder === 'asc' });
+
+    // 分页
+    supabaseQuery = supabaseQuery.range(from, to);
+
+    const { data: news, error, count: total } = await supabaseQuery;
+
+    if (error) {
+      throw error;
+    }
+
+    const totalPages = query.limit > 0 && total ? Math.ceil(total / query.limit) : 0;
 
     return successResponse({
-      news: serializeNewsList(news),
+      news: serializeNewsList(news || []),
       pagination: {
         current: query.page,
         total: totalPages,
-        count: news.length,
-        totalCount: total,
+        count: news?.length || 0,
+        totalCount: total || 0,
         hasNext: query.page < totalPages,
         hasPrev: query.page > 1,
       },

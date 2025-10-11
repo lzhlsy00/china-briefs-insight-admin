@@ -1,8 +1,7 @@
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { handleRouteError } from '@/lib/api/error';
 import { successResponse } from '@/lib/api/response';
 import { serializeNews } from '@/lib/api/serializers';
-import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +21,7 @@ const uploadSchema = z.object({
 
 type UploadInput = z.infer<typeof uploadSchema>;
 
-const buildCreateData = (input: UploadInput): Prisma.NewsCreateInput => {
+const buildCreateData = (input: UploadInput): Record<string, unknown> => {
   const {
     title,
     isoDate,
@@ -34,16 +33,16 @@ const buildCreateData = (input: UploadInput): Prisma.NewsCreateInput => {
     category,
   } = input;
 
-  const data: Prisma.NewsCreateInput = {
+  const data: Record<string, unknown> = {
     title,
-    isoDate: new Date(isoDate),
+    iso_date: isoDate,
     link,
     status: status ?? 'DRAFT',
   };
 
   if (content !== undefined) data.content = content ?? null;
-  if (aiReason !== undefined) data.aiReason = aiReason ?? null;
-  if (aiWorth !== undefined) data.aiWorth = aiWorth ?? null;
+  if (aiReason !== undefined) data.ai_reason = aiReason ?? null;
+  if (aiWorth !== undefined) data.ai_worth = aiWorth ?? null;
   if (category !== undefined) data.category = category ?? null;
 
   return data;
@@ -54,9 +53,15 @@ export async function POST(request: Request) {
     const payload = await request.json();
     const input = uploadSchema.parse(payload);
 
-    const news = await prisma.news.create({
-      data: buildCreateData(input),
-    });
+    const { data: news, error } = await supabase
+      .from('news')
+      .insert(buildCreateData(input))
+      .select()
+      .single();
+
+    if (error || !news) {
+      throw error || new Error('创建新闻失败');
+    }
 
     return successResponse(serializeNews(news), { status: 201, message: '新闻上传成功' });
   } catch (error) {
