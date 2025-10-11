@@ -1,7 +1,6 @@
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { handleRouteError } from '@/lib/api/error';
 import { errorResponse, successResponse } from '@/lib/api/response';
-import { serializeNews } from '@/lib/api/serializers';
 import { applyCorsHeaders, createCorsPreflightResponse } from '@/lib/api/cors';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
@@ -23,21 +22,44 @@ export const GET = async (request: NextRequest, context: RouteContext) => {
   try {
     const id = await parseId(context);
 
-    const news = await prisma.news.findFirst({
-      where: {
-        id,
-        status: 'PUBLISH',
-      },
-    });
+    const { data: news, error } = await supabase
+      .from('news')
+      .select('*')
+      .eq('id', id)
+      .eq('status', 'PUBLISH')
+      .single();
 
-    if (!news) {
-      return errorResponse('新闻不存在或未发布', { status: 404 });
+    if (error || !news) {
+      return applyCorsHeaders(errorResponse('新闻不存在或未发布', { status: 404 }), request);
     }
 
-    const { aiReason: _aiReason, ...rest } = serializeNews(news);
-    void _aiReason;
+    // 转换字段名为驼峰命名，移除 ai_reason
+    const { 
+      ai_reason,
+      iso_date,
+      ai_worth,
+      ai_reason_en,
+      ai_reason_ko,
+      'translation-ko': translationKo,
+      'translation-en': translationEn,
+      'title-ko': titleKo,
+      'title-en': titleEn,
+      ...rest 
+    } = news;
 
-    return applyCorsHeaders(successResponse(rest), request);
+    const response = {
+      ...rest,
+      isoDate: iso_date,
+      aiWorth: ai_worth,
+      aiReasonEn: ai_reason_en,
+      aiReasonKo: ai_reason_ko,
+      translationKo,
+      translationEn,
+      titleKo,
+      titleEn,
+    };
+
+    return applyCorsHeaders(successResponse(response), request);
   } catch (error) {
     return applyCorsHeaders(handleRouteError(error), request);
   }

@@ -1,9 +1,7 @@
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { handleRouteError } from '@/lib/api/error';
 import { successResponse } from '@/lib/api/response';
-import { serializeNewsList } from '@/lib/api/serializers';
 import { applyCorsHeaders, createCorsPreflightResponse } from '@/lib/api/cors';
-import { Prisma } from '@prisma/client';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 
@@ -16,25 +14,6 @@ const querySchema = z.object({
 });
 
 type PublicNewsQuery = z.infer<typeof querySchema>;
-
-const buildWhere = (query: PublicNewsQuery): Prisma.NewsWhereInput => {
-  const where: Prisma.NewsWhereInput = {
-    status: 'PUBLISH',
-  };
-
-  if (query.category) {
-    where.category = {
-      contains: query.category,
-      mode: 'insensitive',
-    };
-  }
-
-  if (query.hot) {
-    where.aiWorth = true;
-  }
-
-  return where;
-};
 
 export const GET = async (request: NextRequest) => {
   try {
@@ -51,29 +30,71 @@ export const GET = async (request: NextRequest) => {
     }
 
     const query = parsed.data;
-    const skip = (query.page - 1) * query.limit;
-    const orderBy: Prisma.NewsOrderByWithRelationInput[] = query.latest
-      ? [{ isoDate: 'desc' }, { id: 'desc' }]
-      : [{ id: 'desc' }];
+    const from = (query.page - 1) * query.limit;
+    const to = from + query.limit - 1;
 
-    const where = buildWhere(query);
+    // 构建 Supabase 查询
+    let supabaseQuery = supabase
+      .from('news')
+      .select('*', { count: 'exact' })
+      .eq('status', 'PUBLISH');
 
-    const [total, news] = await Promise.all([
-      prisma.news.count({ where }),
-      prisma.news.findMany({
-        where,
-        skip,
-        take: query.limit,
-        orderBy,
-      }),
-    ]);
+    // 分类过滤
+    if (query.category) {
+      supabaseQuery = supabaseQuery.ilike('category', `%${query.category}%`);
+    }
 
-    const serialized = serializeNewsList(news).map(({ aiReason: _aiReason, ...rest }) => {
-      void _aiReason;
-      return { ...rest };
+    // 热点过滤
+    if (query.hot) {
+      supabaseQuery = supabaseQuery.eq('ai_worth', true);
+    }
+
+    // 排序
+    if (query.latest) {
+      supabaseQuery = supabaseQuery.order('iso_date', { ascending: false });
+      supabaseQuery = supabaseQuery.order('id', { ascending: false });
+    } else {
+      supabaseQuery = supabaseQuery.order('id', { ascending: false });
+    }
+
+    // 分页
+    supabaseQuery = supabaseQuery.range(from, to);
+
+    const { data: news, error, count: total } = await supabaseQuery;
+
+    if (error) {
+      throw error;
+    }
+
+    // 序列化数据：转换字段名为驼峰命名，移除 ai_reason
+    const serialized = (news || []).map((item) => {
+      const { 
+        ai_reason, 
+        iso_date,
+        ai_worth,
+        ai_reason_en,
+        ai_reason_ko,
+        'translation-ko': translationKo,
+        'translation-en': translationEn,
+        'title-ko': titleKo,
+        'title-en': titleEn,
+        ...rest 
+      } = item;
+      
+      return {
+        ...rest,
+        isoDate: iso_date,
+        aiWorth: ai_worth,
+        aiReasonEn: ai_reason_en,
+        aiReasonKo: ai_reason_ko,
+        translationKo,
+        translationEn,
+        titleKo,
+        titleEn,
+      };
     });
 
-    const totalPages = query.limit > 0 ? Math.ceil(total / query.limit) : 0;
+    const totalPages = query.limit > 0 && total ? Math.ceil(total / query.limit) : 0;
 
     const response = successResponse({
       news: serialized,
@@ -81,7 +102,7 @@ export const GET = async (request: NextRequest) => {
         current: query.page,
         total: totalPages,
         count: serialized.length,
-        totalCount: total,
+        totalCount: total || 0,
         hasNext: query.page < totalPages,
         hasPrev: query.page > 1,
       },
