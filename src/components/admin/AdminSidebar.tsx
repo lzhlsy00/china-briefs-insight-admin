@@ -1,12 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 
 export default function AdminSidebar() {
+  const pathname = usePathname()
   const [activeMenu, setActiveMenu] = useState('news')
   const { logout } = useAuth()
+
+  // 根据当前路径设置活动菜单
+  useEffect(() => {
+    if (pathname === '/admin/users') {
+      setActiveMenu('users')
+    } else if (pathname === '/admin') {
+      setActiveMenu('news')
+    }
+  }, [pathname])
 
   const menuItems = [
     {
@@ -18,11 +29,21 @@ export default function AdminSidebar() {
         </svg>
       ),
       href: '/admin'
+    },
+    {
+      id: 'users',
+      name: 'Users',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      ),
+      href: '/admin/users'
     }
   ]
 
   return (
-    <aside className="w-64 bg-black min-h-screen flex flex-col">
+    <aside className="w-64 bg-black h-screen flex flex-col fixed left-0 top-0">
       {/* 顶部Logo */}
       <div className="p-6 border-b border-gray-800">
         <Link href="/admin" className="block">

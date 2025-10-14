@@ -190,7 +190,7 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
     <>
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <span className="text-sm font-medium text-gray-700">AI筛选</span>
+          <span className="text-sm font-medium text-gray-700">AI Worth</span>
           <div className="inline-flex rounded-md border border-gray-200 bg-white shadow-sm">
             {[
               { label: 'ALL', value: 'ALL' as const },

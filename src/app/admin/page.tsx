@@ -47,12 +47,12 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen bg-gray-100">
       {/* Left sidebar */}
       <AdminSidebar />
       
       {/* Right content area */}
-      <main className="flex-1 p-6">
+      <main className="ml-64 p-6">
         {currentView === 'list' ? (
           <div className="bg-white rounded-lg shadow-md">
             <div className="p-6 border-b border-gray-200">
