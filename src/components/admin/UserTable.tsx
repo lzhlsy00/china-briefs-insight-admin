@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 interface UserProfile {
   id: string
@@ -27,6 +28,32 @@ export default function UserTable() {
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [menuPosition, setMenuPosition] = useState<{ id: string; top: number; left: number } | null>(null)
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const [isMounted, setIsMounted] = useState(false)
+  const MENU_WIDTH = 128
+  const MENU_OFFSET = 6
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  const calculateMenuPosition = (userId: string) => {
+    const button = buttonRefs.current[userId]
+    if (!button || typeof window === 'undefined') {
+      return null
+    }
+
+    const rect = button.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const minGap = 8
+    const maxLeft = Math.max(minGap, viewportWidth - MENU_WIDTH - minGap)
+
+    return {
+      top: rect.bottom + MENU_OFFSET,
+      left: Math.min(Math.max(rect.left, minGap), maxLeft),
+    }
+  }
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   // 获取用户列表
@@ -65,11 +92,13 @@ export default function UserTable() {
         return
       }
       setOpenMenuId(null)
+      setMenuPosition(null)
     }
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setOpenMenuId(null)
+        setMenuPosition(null)
       }
     }
 
@@ -80,6 +109,39 @@ export default function UserTable() {
       document.removeEventListener('keydown', handleEscape)
     }
   }, [openMenuId])
+
+  useEffect(() => {
+    if (!openMenuId) return
+
+    const updatePosition = () => {
+      const nextPosition = calculateMenuPosition(openMenuId)
+      if (!nextPosition) return
+
+      setMenuPosition({ id: openMenuId, ...nextPosition })
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [openMenuId])
+
+  const toggleMenu = (userId: string) => {
+    if (openMenuId === userId) {
+      setOpenMenuId(null)
+      setMenuPosition(null)
+      return
+    }
+
+    setOpenMenuId(userId)
+    const nextPosition = calculateMenuPosition(userId)
+    if (!nextPosition) return
+
+    setMenuPosition({ id: userId, ...nextPosition })
+  }
 
   // Format date
   const formatDate = (isoDate: string | null) => {
@@ -145,6 +207,7 @@ export default function UserTable() {
 
     setUpdatingId(userId)
     setOpenMenuId(null)
+    setMenuPosition(null)
 
     try {
       const response = await fetch(`/api/v1/admin/users/${userId}`, {
@@ -178,7 +241,7 @@ export default function UserTable() {
   }
 
   // Subscription options
-  const subscriptionOptions = ['free', 'trial', 'premium', 'pro']
+  const subscriptionOptions = ['free', 'pro']
 
   if (error) {
     return (
@@ -196,7 +259,7 @@ export default function UserTable() {
 
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto overflow-y-visible">
         {loading && (
           <div className="text-center py-8">
             <div className="text-gray-600">Loading...</div>
@@ -247,8 +310,11 @@ export default function UserTable() {
                     <td className="px-6 py-4">
                       <div className="relative inline-block">
                         <button
+                          ref={(node) => {
+                            buttonRefs.current[user.id] = node
+                          }}
                           type="button"
-                          onClick={() => setOpenMenuId(openMenuId === user.id ? null : user.id)}
+                          onClick={() => toggleMenu(user.id)}
                           disabled={updatingId === user.id}
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-200 ${getSubscriptionStyle(user.subscription_status)} ${
                             updatingId === user.id 
@@ -262,31 +328,34 @@ export default function UserTable() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                           </svg>
                         </button>
-                        
-                        {openMenuId === user.id && (
-                          <div
-                            className="absolute z-10 mt-1 w-32 bg-white border border-gray-200 rounded-md shadow-lg"
-                            data-subscription-menu="true"
-                          >
-                            <div className="py-1">
-                              {subscriptionOptions.map((option) => (
-                                <button
-                                  key={option}
-                                  type="button"
-                                  onClick={() => updateSubscription(user.id, option)}
-                                  disabled={updatingId === user.id || user.subscription_status === option}
-                                  className={`w-full text-left px-4 py-2 text-sm transition-colors duration-150 ${
-                                    user.subscription_status === option
-                                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                                  }`}
-                                >
-                                  {getSubscriptionText(option)}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                        {isMounted && openMenuId === user.id && menuPosition?.id === user.id &&
+                          createPortal(
+                            <div
+                              className="fixed z-[1000] w-32 bg-white border border-gray-200 rounded-md shadow-lg"
+                              data-subscription-menu="true"
+                              style={{ top: menuPosition.top, left: menuPosition.left }}
+                            >
+                              <div className="py-1">
+                                {subscriptionOptions.map((option) => (
+                                  <button
+                                    key={option}
+                                    type="button"
+                                    onClick={() => updateSubscription(user.id, option)}
+                                    disabled={updatingId === user.id || user.subscription_status === option}
+                                    className={`w-full text-left px-4 py-2 text-sm transition-colors duration-150 ${
+                                      user.subscription_status === option
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                                    }`}
+                                  >
+                                    {getSubscriptionText(option)}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>,
+                            document.body
+                          )
+                        }
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
@@ -337,4 +406,3 @@ export default function UserTable() {
     </>
   )
 }
-
