@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 type StripeEvent = {
   id?: string
   type?: string
