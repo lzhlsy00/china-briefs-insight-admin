@@ -43,6 +43,11 @@ Create an `.env` file (see `.env.example`) with the following variables:
   When omitted, the UI will talk to the co-located `/api/v1` routes.
 - `CORS_ALLOWED_ORIGINS` – Optional comma-separated list of origins allowed to
   call the API from the browser. Defaults to `*` which enables public access.
+- `SUPABASE_URL` – Supabase 项目地址，后端使用 service key 直接访问数据库。
+- `SUPABASE_SERVICE_KEY` – Supabase service role 密钥，用于服务端调用。
+- `OPENAI_API_KEY` – 生成每日推送摘要所需的密钥，未设置时将退化为简单排序。
+- `OPENAI_MODEL` – 可选，自定义使用的模型（默认 `gpt-4o-mini`）。
+- `OPENAI_BASE_URL` – 可选，接入 OpenAI 兼容服务时指定自定义 Base URL。
 
 ## Useful Commands
 

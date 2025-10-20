@@ -4,6 +4,11 @@ const ALLOWED_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
 const DEFAULT_ALLOWED_HEADERS = 'Content-Type, Authorization, X-Requested-With';
 const MAX_AGE = '86400';
 
+const normalizeOrigin = (origin?: string | null): string | null => {
+  if (!origin) return null;
+  return origin.replace(/\/+$/, '').trim().toLowerCase();
+};
+
 type MaybeRequest = Request | undefined;
 
 const parseAllowedOrigins = (): string[] => {
@@ -24,8 +29,13 @@ const resolveAllowedOrigin = (request: MaybeRequest, allowedOrigins: string[]): 
   }
 
   const requestOrigin = request?.headers.get('origin');
-  if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
-    return requestOrigin;
+  const normalizedRequest = normalizeOrigin(requestOrigin);
+
+  if (normalizedRequest) {
+    const matchedOrigin = allowedOrigins.find((origin) => normalizeOrigin(origin) === normalizedRequest);
+    if (matchedOrigin) {
+      return matchedOrigin;
+    }
   }
 
   return allowedOrigins[0] ?? '*';

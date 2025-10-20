@@ -167,6 +167,28 @@ FortuneNews Admin 已集成原 Express 后端，所有 API 由 Next.js App Route
 | `GET /api/v1` | 基本信息与入口列表 |
 | `GET /api/v1/docs` | 返回上述端点的 JSON 概览 |
 | `GET /api/v1/health` | 健康检查（含数据库连通情况） |
+| `POST /api/v1/push/generate` | 触发 AI 生成推送摘要并写入待发送列表 |
+
+### POST `/api/v1/push/generate`
+- **说明**：定时任务调用此端点，从最新已发布新闻中挑选 5 条生成推送摘要，并写入 `push_content`。
+- **请求体**：无需请求体；建议结合 Supabase 或 Vercel Cron 每日执行一次。
+- **响应**：成功时返回生成的 `contentId`、入库时间 `date` 以及被选中的 5 条新闻。
+  ```json
+  {
+    "success": true,
+    "data": {
+      "created": true,
+      "contentId": 123,
+      "date": "2024-12-20T02:30:00.000Z",
+      "published": false,
+      "items": [
+        {"id": 1, "title": "Sample Headline", "summary": "Concise English summary explaining why the story matters.", "link": "https://www.bitechina.com/article/1"}
+      ]
+    },
+    "message": "推送内容已生成"
+  }
+  ```
+- **备注**：需要配置 `OPENAI_API_KEY`；默认以英文返回标题和摘要，若未配置将回退为按时间排序的最近五条新闻（无 AI 评分）。
 
 ---
 
