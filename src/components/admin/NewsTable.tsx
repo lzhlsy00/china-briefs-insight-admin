@@ -12,6 +12,9 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null)
   const [aiFilter, setAiFilter] = useState<'ALL' | 'TRUE' | 'FALSE'>('ALL')
+  const [activeSort, setActiveSort] = useState<'isoDate' | 'status'>('isoDate')
+  const [dateSortOrder, setDateSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [statusSortOrder, setStatusSortOrder] = useState<'asc' | 'desc'>('asc')
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   
   const { 
@@ -30,20 +33,20 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
   
   const { deleteNews, updateNews } = useNewsApi()
 
-  // 格式化时间
+  // 格式化时间为 YYYY-MM-DD HH:mm
   const formatTime = (isoDate: string) => {
     const date = new Date(isoDate)
-    const now = new Date()
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-    
-    if (diffInHours < 1) {
-      return '刚刚'
-    } else if (diffInHours < 24) {
-      return `${diffInHours}小时前`
-    } else {
-      const diffInDays = Math.floor(diffInHours / 24)
-      return `${diffInDays}天前`
+    if (Number.isNaN(date.getTime())) {
+      return 'Invalid date'
     }
+
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+
+    return `${year}-${month}-${day} ${hours}:${minutes}`
   }
 
   // 获取状态样式
@@ -92,6 +95,16 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
       '体育': 'bg-orange-100 text-orange-800'
     }
     return colors[category] || 'bg-gray-100 text-gray-800'
+  }
+
+  const getContentPreview = (content?: string | null) => {
+    if (!content) return null
+
+    const trimmed = content.trim()
+    if (!trimmed) return null
+
+    const maxLength = 80
+    return trimmed.length > maxLength ? `${trimmed.slice(0, maxLength)}…` : trimmed
   }
 
   // Handle edit
@@ -172,6 +185,24 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
     updateParams({ page: 1, aiWorth: value === 'TRUE' })
   }
 
+  const handleDateSortToggle = () => {
+    const nextOrder = dateSortOrder === 'asc' ? 'desc' : 'asc'
+    setDateSortOrder(nextOrder)
+    setActiveSort('isoDate')
+    updateParams({ page: 1, sortBy: 'isoDate', sortOrder: nextOrder })
+  }
+
+  const handleStatusSortToggle = () => {
+    const nextOrder = statusSortOrder === 'asc' ? 'desc' : 'asc'
+    setStatusSortOrder(nextOrder)
+    setActiveSort('status')
+    updateParams({ page: 1, sortBy: 'status', sortOrder: nextOrder })
+  }
+
+  const dateSortLabel = dateSortOrder === 'asc' ? 'Date (Asc)' : 'Date (Desc)'
+  const statusSortLabel = statusSortOrder === 'asc' ? 'Status (Draft->Publish)' : 'Status (Publish->Draft)'
+  const isActionDisabled = loading || deletingId !== null || statusUpdatingId !== null
+
   if (error) {
     return (
       <div className="text-center py-8">
@@ -188,7 +219,7 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
 
   return (
     <>
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div className="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center gap-4">
         <div className="flex items-center space-x-3">
           <span className="text-sm font-medium text-gray-700">AI Worth</span>
           <div className="inline-flex rounded-md border border-gray-200 bg-white shadow-sm">
@@ -204,12 +235,39 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
                   aiFilter === option.value
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
-              } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={loading || deletingId !== null || statusUpdatingId !== null}
+              } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isActionDisabled}
             >
               {option.label}
             </button>
           ))}
+          </div>
+        </div>
+        <div className="flex items-center space-x-3">
+          <span className="text-sm font-medium text-gray-700">Sorting</span>
+          <div className="inline-flex rounded-md border border-gray-200 bg-white shadow-sm">
+            <button
+              onClick={handleDateSortToggle}
+              className={`px-3 py-1 text-sm transition-colors duration-200 first:rounded-l-md last:rounded-r-md ${
+                activeSort === 'isoDate'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isActionDisabled}
+            >
+              {dateSortLabel}
+            </button>
+            <button
+              onClick={handleStatusSortToggle}
+              className={`px-3 py-1 text-sm transition-colors duration-200 first:rounded-l-md last:rounded-r-md ${
+                activeSort === 'status'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isActionDisabled}
+            >
+              {statusSortLabel}
+            </button>
           </div>
         </div>
       </div>
@@ -249,15 +307,17 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
                   </td>
                 </tr>
               ) : (
-                newsList.map((news) => (
+                newsList.map((news) => {
+                  const preview = getContentPreview(news.content)
+                  return (
                   <tr key={news.id} className="hover:bg-gray-50 transition-colors duration-200">
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900 line-clamp-2">
                         {news.title}
                       </div>
-                      {news.content && (
+                      {preview && (
                         <div className="text-xs text-gray-500 mt-1 line-clamp-1">
-                          {news.content}
+                          {preview}
                         </div>
                       )}
                     </td>
@@ -340,7 +400,7 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
                       </div>
                     </td>
                   </tr>
-                ))
+                )})
               )}
             </tbody>
           </table>

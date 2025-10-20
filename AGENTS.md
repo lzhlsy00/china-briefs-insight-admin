@@ -1,24 +1,24 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-FortuneNews Admin is a Next.js 15 + TypeScript dashboard. Application routes live in `src/app`, with admin pages under `src/app/admin`. Shared React components sit in `src/components`, domain hooks in `src/hooks`, client libraries (Prisma, Supabase, API helpers) under `src/lib`, and HTTP wrappers in `src/services`. Types reside in `src/types`, the Prisma schema in `prisma/schema.prisma`, static assets in `public`, and supplemental references in `docs/`.
+FortuneNews Admin runs on Next.js 15 with TypeScript. Application routes live in `src/app`, with admin dashboards under `src/app/admin`. Shared UI components sit in `src/components`, hooks in `src/hooks`, and client helpers (Prisma, Supabase, API wrappers) in `src/lib` and `src/services`. Domain types reside in `src/types`; database schema sits in `prisma/schema.prisma`; static assets are in `public`; additional references live under `docs/`.
 
 ## Build, Test, and Development Commands
-- `npm run dev` — launch the dashboard with Turbopack; watch for server/API errors in the terminal.
-- `npm run build` — create an optimized production bundle.
-- `npm run start` — serve the optimized build (requires a prior build).
-- `npm run lint` — run ESLint using `next/core-web-vitals` rules; append `-- --fix` to auto-fix.
-- `npx prisma generate` — regenerate the Prisma client (also runs automatically after install).
-- `npx prisma migrate dev --name <migration>` — create and apply local schema changes.
+- `npm run dev` launches the dashboard with Turbopack; watch the terminal for API and server logs.
+- `npm run build` compiles an optimized production bundle.
+- `npm run start` serves the last production build; run only after a successful build.
+- `npm run lint` enforces `next/core-web-vitals` rules; append `-- --fix` to auto-format.
+- `npx prisma generate` refreshes the Prisma client after schema edits.
+- `npx prisma migrate dev --name <migration>` creates and applies local migrations.
 
 ## Coding Style & Naming Conventions
-Use TypeScript with 2-space indentation and rely on ESLint for formatting enforcement; resolve warnings before opening a PR. Components and hooks follow PascalCase (`NewsTable`) and `use`-prefixed names (`useNewsList`). Modules inside `src/lib` and `src/services` export camelCase helpers; Next.js route folders stay kebab-case to match URL segments. Keep Tailwind utility strings grouped by layout → color for readability.
+Write TypeScript with 2-space indentation and rely on ESLint for formatting. Name React components and hooks with PascalCase (`NewsTable`) and `use` prefixes (`useNewsList`). Modules in `src/lib` and `src/services` export camelCase helpers. Route folders remain kebab-case to mirror URL segments. Tailwind utility strings should group layout classes before color classes.
 
 ## Testing Guidelines
-No automated suite ships yet. When adding features, include targeted tests (prefer React Testing Library or integration checks collocated as `Component.test.tsx`) and document any manual verification performed in the PR. For data mutations, cover both Prisma service logic and UI state updates. Aim for meaningful assertions instead of snapshot-only tests.
+Add focused tests alongside features, preferably with React Testing Library. Co-locate tests as `Component.test.tsx` next to the component under test. Cover service-level mutations (Prisma interactions) and UI state changes. Document any manual verification steps in the PR when automated coverage is absent.
 
 ## Commit & Pull Request Guidelines
-Write present-tense commit subjects that capture the change scope, e.g. `feat(admin): add AI status filter`. Squash incidental work into the relevant commit. Pull requests should link tracking issues, describe data/model impacts, note required env vars, and attach UI screenshots or screencasts when visuals change. Confirm `npm run lint` and required migrations have been run.
+Write present-tense commit subjects such as `feat(admin): add AI status filter`. Squash incidental work into the main change. PRs must link tracking issues, summarize data or model impacts, highlight new env vars, and attach screenshots or screencasts for UI changes. Confirm `npm run lint` and required migrations before requesting review.
 
-## Configuration & Security Tips
-Maintain secrets in `.env` files (never commit). Required keys include `DATABASE_URL`, `NEXT_PUBLIC_API_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `PUBLISH_WEBHOOK_URL`, and `CORS_ALLOWED_ORIGINS`. Prisma migrations and Supabase access both depend on accurate values, so document defaults in PRs and coordinate rotations with the team.
+## Security & Configuration Tips
+Store secrets in `.env` files and never commit them. Required keys include `DATABASE_URL`, `NEXT_PUBLIC_API_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `PUBLISH_WEBHOOK_URL`, and `CORS_ALLOWED_ORIGINS`. Coordinate credential rotations with the team and document default values when relevant.
