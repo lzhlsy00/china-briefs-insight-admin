@@ -3,6 +3,19 @@ import { supabase } from '@/lib/supabase';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { handleRouteError } from '@/lib/api/error';
 
+type RawUserProfile = {
+  id: string;
+  email: string;
+  full_name?: string | null;
+  subscription_status?: string | null;
+  created_at?: string | null;
+  subscribed?: string | null;
+  latest_renewal?: string | null;
+  transactions?: number | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+};
+
 export const dynamic = 'force-dynamic';
 
 /**
@@ -19,28 +32,43 @@ export async function GET(request: NextRequest) {
     // 获取总数
     const { count, error: countError } = await supabase
       .from('user_profiles')
-      .select('*', { count: 'exact', head: true });
+      .select('id', { count: 'exact', head: true });
 
     if (countError) {
+      console.error('Supabase count error (user_profiles):', countError)
       return errorResponse('Failed to fetch user count', { status: 500 });
     }
 
     // 获取用户列表
     const { data: users, error } = await supabase
       .from('user_profiles')
-      .select('id, email, full_name, subscription_status, subscription_end, created_at')
-      .order('created_at', { ascending: false })
+      .select('*')
+      .order('created_at', { ascending: false, nullsFirst: false })
       .range(offset, offset + limit - 1);
 
     if (error) {
+      console.error('Supabase fetch users error:', error)
       return errorResponse('Failed to fetch users', { status: 500 });
     }
+
+    const rawUsers = (users ?? []) as RawUserProfile[]
+    const normalizedUsers = rawUsers.map((user) => ({
+      id: user.id,
+      email: user.email,
+      subscription_status: user.subscription_status ?? 'unknown',
+      created_at: user.created_at ?? null,
+      subscribed: user.subscribed ?? null,
+      latest_renewal: user.latest_renewal ?? null,
+      transactions: user.transactions ?? 0,
+      current_period_start: user.current_period_start ?? null,
+      current_period_end: user.current_period_end ?? null,
+    }));
 
     const totalCount = count || 0;
     const totalPages = Math.ceil(totalCount / limit);
 
     return successResponse({
-      users: users || [],
+      users: normalizedUsers,
       pagination: {
         current: page,
         totalCount,
@@ -54,4 +82,3 @@ export async function GET(request: NextRequest) {
     return handleRouteError(error);
   }
 }
-

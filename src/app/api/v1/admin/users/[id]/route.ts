@@ -16,14 +16,13 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { subscription_status, subscription_end } = body;
+    const { subscription_status } = body;
 
     // 更新用户订阅状态
     const { data, error } = await supabase
       .from('user_profiles')
       .update({
         subscription_status,
-        ...(subscription_end !== undefined && { subscription_end }),
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)

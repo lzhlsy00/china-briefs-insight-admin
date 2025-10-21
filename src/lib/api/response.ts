@@ -17,6 +17,27 @@ type ErrorBody = {
   errors?: ValidationError[];
 };
 
+export const corsHeaders: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+};
+
+const withCors = (init?: ResponseInit) => {
+  const headers = new Headers(init?.headers ?? {});
+
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    headers.set(key, value);
+  });
+
+  return {
+    ...init,
+    headers,
+  } as ResponseInit;
+};
+
+export const optionsResponse = () => new NextResponse(null, withCors({ status: 204 }));
+
 export const successResponse = <T>(data: T, init?: ResponseInit & { message?: string }) => {
   const { message, ...responseInit } = init ?? {};
   const body: SuccessBody<T> = {
@@ -25,11 +46,11 @@ export const successResponse = <T>(data: T, init?: ResponseInit & { message?: st
     ...(message ? { message } : {}),
   };
 
-  return NextResponse.json(body, responseInit);
+  return NextResponse.json(body, withCors(responseInit));
 };
 
 export const successMessage = (message: string, init?: ResponseInit) => {
-  return NextResponse.json({ success: true, message }, init);
+  return NextResponse.json({ success: true, message }, withCors(init));
 };
 
 export const errorResponse = (message: string, options?: { status?: number; errors?: ValidationError[] }) => {
@@ -40,5 +61,5 @@ export const errorResponse = (message: string, options?: { status?: number; erro
     ...(errors?.length ? { errors } : {}),
   };
 
-  return NextResponse.json(body, { status });
+  return NextResponse.json(body, withCors({ status }));
 };

@@ -6,10 +6,13 @@ import { createPortal } from 'react-dom'
 interface UserProfile {
   id: string
   email: string
-  full_name: string | null
   subscription_status: string
-  subscription_end: string | null
-  created_at: string
+  created_at: string | null
+  subscribed: string | null
+  latest_renewal: string | null
+  transactions: number | null
+  current_period_start: string | null
+  current_period_end: string | null
 }
 
 interface Pagination {
@@ -144,18 +147,9 @@ export default function UserTable() {
   }
 
   // Format date
-  const formatDate = (isoDate: string | null) => {
-    if (!isoDate) return '-'
-    const date = new Date(isoDate)
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
-  }
-
   // Format creation time
-  const formatCreateTime = (isoDate: string) => {
+  const formatCreateTime = (isoDate: string | null) => {
+    if (!isoDate) return '-'
     const date = new Date(isoDate)
     return date.toLocaleString('en-US', {
       year: 'numeric',
@@ -168,7 +162,8 @@ export default function UserTable() {
 
   // 获取订阅状态样式
   const getSubscriptionStyle = (status: string) => {
-    switch (status.toLowerCase()) {
+    const normalized = status?.toLowerCase?.() ?? 'unknown'
+    switch (normalized) {
       case 'premium':
       case 'pro':
         return 'bg-purple-100 text-purple-800'
@@ -183,7 +178,8 @@ export default function UserTable() {
 
   // Get subscription text
   const getSubscriptionText = (status: string) => {
-    switch (status.toLowerCase()) {
+    const normalized = status?.toLowerCase?.() ?? 'unknown'
+    switch (normalized) {
       case 'premium':
         return 'Premium'
       case 'pro':
@@ -274,16 +270,25 @@ export default function UserTable() {
                   Email
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Subscription
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Expires
+                  Created
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Created
+                  First Subscribe
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Latest Renewal
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Period Start
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Period End
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Transactions
                 </th>
               </tr>
             </thead>
@@ -300,11 +305,6 @@ export default function UserTable() {
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900">
                         {user.email}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">
-                        {user.full_name || '-'}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -359,10 +359,22 @@ export default function UserTable() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      {formatDate(user.subscription_end)}
+                      {formatCreateTime(user.created_at)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      {formatCreateTime(user.created_at)}
+                      {formatCreateTime(user.subscribed)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {formatCreateTime(user.latest_renewal)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {formatCreateTime(user.current_period_start)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {formatCreateTime(user.current_period_end)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {user.transactions ?? 0}
                     </td>
                   </tr>
                 ))
