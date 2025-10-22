@@ -182,19 +182,11 @@ const handleInvoicePaymentSucceeded = async (invoice: Stripe.Invoice) => {
 
   const { userId, subscription } = resolved;
 
-  const resolvePeriod = (value?: number | null) => (typeof value === 'number' ? toIso(value) : null);
-  const subscriptionPeriodStart = subscription?.current_period_start ? toIso(subscription.current_period_start) : null;
-  const subscriptionPeriodEnd = subscription?.current_period_end ? toIso(subscription.current_period_end) : null;
-  const linePeriodStart = invoice.lines?.data?.[0]?.period?.start;
-  const linePeriodEnd = invoice.lines?.data?.[0]?.period?.end;
-  const periodStart = subscriptionPeriodStart ?? resolvePeriod(linePeriodStart) ?? resolvePeriod(invoice.period_start);
-  const periodEnd = subscriptionPeriodEnd ?? resolvePeriod(linePeriodEnd) ?? resolvePeriod(invoice.period_end);
-
   const { data: profile, error: fetchError } = await supabase
     .from('user_profiles')
-    .select('subscribed, transactions')
+    .select('subscribed, transactions, current_period_start, current_period_end')
     .eq('id', userId)
-    .maybeSingle<{ subscribed: string | null; transactions: number | null }>();
+    .maybeSingle<{ subscribed: string | null; transactions: number | null; current_period_start: string | null; current_period_end: string | null }>();
 
   if (fetchError) {
     console.error('Supabase fetch user profile failed', { userId, error: fetchError });
@@ -211,19 +203,41 @@ const handleInvoicePaymentSucceeded = async (invoice: Stripe.Invoice) => {
 
   const quantity = invoice.lines?.data?.reduce((sum, line) => sum + (line.quantity ?? 0), 0) ?? 0;
   const normalizedQuantity = quantity > 0 ? quantity : 1;
+  const intervalMs = normalizedQuantity * 30 * 24 * 60 * 60 * 1000;
+
+  const existingStart = profile.current_period_start ? new Date(profile.current_period_start) : null;
+  const existingEnd = profile.current_period_end ? new Date(profile.current_period_end) : null;
+  const subscriptionPeriodStart = subscription?.current_period_start ? new Date(subscription.current_period_start * 1000) : null;
+  const linePeriodStart = invoice.lines?.data?.[0]?.period?.start ? new Date((invoice.lines?.data?.[0]?.period?.start ?? 0) * 1000) : null;
+  const nowDate = new Date();
+
+  let periodStartDate: Date;
+  let periodEndDate: Date;
+
+  if (existingEnd && existingEnd.getTime() > nowDate.getTime()) {
+    periodStartDate = existingStart ?? nowDate;
+    const baseEnd = new Date(Math.max(existingEnd.getTime(), nowDate.getTime()));
+    periodEndDate = new Date(baseEnd.getTime() + intervalMs);
+  } else {
+    periodStartDate = subscriptionPeriodStart ?? linePeriodStart ?? nowDate;
+    if (periodStartDate.getTime() < nowDate.getTime()) {
+      periodStartDate = nowDate;
+    }
+    periodEndDate = new Date(periodStartDate.getTime() + intervalMs);
+  }
 
   const updatedTransactions = (profile.transactions ?? 0) + normalizedQuantity;
 
   const updates: Record<string, unknown> = {
     latest_renewal: paidIso,
     subscription_status: 'pro',
-    current_period_start: periodStart,
-    current_period_end: periodEnd,
+    current_period_start: periodStartDate.toISOString(),
+    current_period_end: periodEndDate.toISOString(),
     transactions: updatedTransactions,
     updated_at: new Date().toISOString(),
   };
 
-  if (!profile.subscribed || invoice.billing_reason === 'subscription_create') {
+  if (!profile.subscribed) {
     updates.subscribed = paidIso;
   }
 
