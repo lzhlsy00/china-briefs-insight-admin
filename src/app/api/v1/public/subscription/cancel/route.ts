@@ -12,7 +12,7 @@ if (!stripeSecretKey) {
 }
 
 const stripeClient = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: '2025-08-27.basil' })
+  ? new Stripe(stripeSecretKey, { apiVersion: '2025-09-30.clover' })
   : null;
 
 const toIso = (timestamp?: number | null) => {
@@ -21,6 +21,37 @@ const toIso = (timestamp?: number | null) => {
   }
 
   return new Date(timestamp * 1000).toISOString();
+};
+
+const derivePeriodBoundary = (
+  items: Stripe.SubscriptionItem[] | undefined,
+  boundary: 'current_period_start' | 'current_period_end',
+) => {
+  if (!items?.length) {
+    return null;
+  }
+
+  let boundaryValue: number | null = null;
+
+  for (const item of items) {
+    const value = item[boundary];
+
+    if (typeof value !== 'number') {
+      continue;
+    }
+
+    if (boundaryValue === null) {
+      boundaryValue = value;
+      continue;
+    }
+
+    boundaryValue =
+      boundary === 'current_period_end'
+        ? Math.max(boundaryValue, value)
+        : Math.min(boundaryValue, value);
+  }
+
+  return toIso(boundaryValue);
 };
 
 export async function POST(request: NextRequest) {
@@ -81,12 +112,14 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
-    const periodEnd = toIso(cancelled.current_period_end);
+    const subscriptionItems = cancelled.items?.data;
+
+    const periodEnd = derivePeriodBoundary(subscriptionItems, 'current_period_end');
     if (periodEnd) {
       updates.current_period_end = periodEnd;
     }
 
-    const periodStart = toIso(cancelled.current_period_start);
+    const periodStart = derivePeriodBoundary(subscriptionItems, 'current_period_start');
     if (periodStart) {
       updates.current_period_start = periodStart;
     }

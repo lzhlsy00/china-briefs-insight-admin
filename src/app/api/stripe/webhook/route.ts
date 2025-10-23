@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 const deriveSubscriptionStatus = (subscription: Stripe.Subscription) => {
   const status = subscription.status;
-  if (status === 'canceled' || status === 'cancelled') {
+  if (status === 'canceled' || (status as string) === 'cancelled') {
     return 'canceled';
   }
 
@@ -24,7 +24,7 @@ const stripeSecretKey = process.env.STRIPE_SECRET_KEY
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
 const stripeClient = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: '2025-08-27.basil' })
+  ? new Stripe(stripeSecretKey, { apiVersion: '2025-09-30.clover' })
   : null
 
 const toIso = (timestamp?: number | null) => {
@@ -94,14 +94,25 @@ const resolveUserFromSubscription = async (subscription: Stripe.Subscription) =>
 };
 
 const resolveUserFromInvoice = async (invoice: Stripe.Invoice) => {
+  const invoiceWithLegacySubscription = invoice as Stripe.Invoice & {
+    subscription?: string;
+    subscription_details?: { subscription?: string };
+  };
+
+  const subscriptionId = (
+    typeof invoiceWithLegacySubscription.subscription === 'string'
+      ? invoiceWithLegacySubscription.subscription
+      : invoiceWithLegacySubscription.subscription_details?.subscription
+  ) ?? null;
+
   let subscriptionData: Stripe.Subscription | null = null;
-  if (typeof invoice.subscription === 'string' && stripeClient) {
+  if (subscriptionId && stripeClient) {
     try {
-      subscriptionData = await stripeClient.subscriptions.retrieve(invoice.subscription);
+      subscriptionData = await stripeClient.subscriptions.retrieve(subscriptionId);
     } catch (error) {
       console.error('Failed to retrieve subscription for invoice', {
         invoiceId: invoice.id,
-        subscriptionId: invoice.subscription,
+        subscriptionId,
         error,
       });
     }
@@ -207,7 +218,10 @@ const handleInvoicePaymentSucceeded = async (invoice: Stripe.Invoice) => {
 
   const existingStart = profile.current_period_start ? new Date(profile.current_period_start) : null;
   const existingEnd = profile.current_period_end ? new Date(profile.current_period_end) : null;
-  const subscriptionPeriodStart = subscription?.current_period_start ? new Date(subscription.current_period_start * 1000) : null;
+  const extendedSubscription = subscription as (Stripe.Subscription & { current_period_start?: number; current_period_end?: number }) | null;
+  const subscriptionPeriodStart = extendedSubscription?.current_period_start
+    ? new Date(extendedSubscription.current_period_start * 1000)
+    : null;
   const linePeriodStart = invoice.lines?.data?.[0]?.period?.start ? new Date((invoice.lines?.data?.[0]?.period?.start ?? 0) * 1000) : null;
   const nowDate = new Date();
 
@@ -266,8 +280,9 @@ const handleSubscriptionUpdated = async (subscription: Stripe.Subscription) => {
     updated_at: new Date().toISOString(),
   };
 
-  const periodStart = toIso(subscription.current_period_start);
-  const periodEnd = toIso(subscription.current_period_end);
+  const extendedSubscription = subscription as Stripe.Subscription & { current_period_start?: number; current_period_end?: number };
+  const periodStart = toIso(extendedSubscription.current_period_start);
+  const periodEnd = toIso(extendedSubscription.current_period_end);
 
   if (periodStart) {
     updates.current_period_start = periodStart;
@@ -295,19 +310,18 @@ const handleSubscriptionDeleted = async (subscription: Stripe.Subscription) => {
   }
 
   const { userId } = resolved;
-  const endedIso = toIso(subscription.ended_at) ?? new Date().toISOString();
-
   const updates: Record<string, unknown> = {
     subscription_status: 'canceled',
     updated_at: new Date().toISOString(),
   };
 
-  const periodEnd = toIso(subscription.current_period_end);
+  const extendedSubscription = subscription as Stripe.Subscription & { current_period_start?: number; current_period_end?: number };
+  const periodEnd = toIso(extendedSubscription.current_period_end);
   if (periodEnd) {
     updates.current_period_end = periodEnd;
   }
 
-  const periodStart = toIso(subscription.current_period_start);
+  const periodStart = toIso(extendedSubscription.current_period_start);
   if (periodStart) {
     updates.current_period_start = periodStart;
   }
