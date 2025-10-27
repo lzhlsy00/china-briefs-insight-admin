@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { NewsItem, NewsUpdateData } from '@/types/api'
 import { useNewsApi } from '@/hooks/useNewsApi'
 
@@ -12,6 +14,7 @@ interface NewsEditPageProps {
 
 export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageProps) {
   const [formData, setFormData] = useState<NewsUpdateData>({})
+  const [languageMode, setLanguageMode] = useState<'EN' | 'KO'>('EN')
   const [saving, setSaving] = useState(false)
   const { updateNews, error, clearError } = useNewsApi()
 
@@ -22,6 +25,10 @@ export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageP
         content: newsItem.content || '',
         category: newsItem.category || '',
         status: newsItem.status,
+        titleKo: newsItem.titleKo ?? '',
+        titleEn: newsItem.titleEn ?? '',
+        translationKo: newsItem.translationKo ?? '',
+        translationEn: newsItem.translationEn ?? '',
       })
       clearError()
     }
@@ -51,6 +58,28 @@ export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageP
       [field]: value
     }))
   }
+
+
+  const handleLanguageToggle = (value: 'EN' | 'KO') => {
+    setLanguageMode(value)
+  }
+
+  const handleLocalizedChange = (field: 'title' | 'content', value: string) => {
+    if (languageMode === 'KO') {
+      if (field === 'title') {
+        handleInputChange('titleKo', value)
+      } else {
+        handleInputChange('translationKo', value)
+      }
+    } else {
+      if (field === 'title') {
+        handleInputChange('titleEn', value)
+      } else {
+        handleInputChange('translationEn', value)
+      }
+    }
+  }
+
 
   return (
     <div className="bg-white rounded-lg shadow-md">
@@ -82,33 +111,105 @@ export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageP
       {/* 编辑表单 */}
       <form onSubmit={handleSubmit} className="p-6">
         <div className="space-y-6">
-          {/* Title */}
+          {/* Language Toggle */}
+          <div className="flex items-center space-x-3">
+            <span className="text-sm font-medium text-gray-700">Language</span>
+            <div className="inline-flex rounded-md border border-gray-200 bg-white shadow-sm">
+              <button
+                type="button"
+                onClick={() => handleLanguageToggle('EN')}
+                className={`px-3 py-1 text-sm transition-colors duration-200 first:rounded-l-md last:rounded-r-md ${languageMode === 'EN' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+                disabled={saving}
+              >
+                English
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLanguageToggle('KO')}
+                className={`px-3 py-1 text-sm transition-colors duration-200 first:rounded-l-md last:rounded-r-md ${languageMode === 'KO' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+                disabled={saving}
+              >
+                Korean
+              </button>
+            </div>
+          </div>
+
+          {/* Localized Title */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Title <span className="text-red-500">*</span>
+              {languageMode === 'KO' ? 'Title (Korean)' : 'Title (English)'} <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={languageMode === 'KO' ? (formData.titleKo ?? '') : (formData.titleEn ?? '')}
+              onChange={(e) => handleLocalizedChange('title', e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              placeholder={languageMode === 'KO' ? '请输入韩文标题' : 'Please enter English title'}
+              required
+              disabled={saving}
+            />
+          </div>
+
+          {/* Localized Content Snippet */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {languageMode === 'KO' ? 'Content Summary (Korean)' : 'Content Summary (English)'}
+            </label>
+            <textarea
+              value={languageMode === 'KO' ? (formData.translationKo ?? '') : (formData.translationEn ?? '')}
+              onChange={(e) => handleLocalizedChange('content', e.target.value)}
+              rows={6}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
+              placeholder={languageMode === 'KO' ? '请输入韩文摘要...' : 'Please enter English summary...'}
+              disabled={saving}
+            />
+            <div className="mt-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">Markdown Preview</span>
+                {(languageMode === 'KO' ? (formData.translationKo ?? '') : (formData.translationEn ?? '')).trim().length === 0 && (
+                  <span className="text-xs text-gray-400">No content</span>
+                )}
+              </div>
+              <div className="mt-2 px-4 py-3 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  className="prose prose-sm max-w-none text-gray-800"
+                >
+                  {languageMode === 'KO'
+                    ? (formData.translationKo ?? '') || ''
+                    : (formData.translationEn ?? '') || ''}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
+
+          {/* Original Title */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Original Title <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={formData.title || ''}
               onChange={(e) => handleInputChange('title', e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              placeholder="Please enter news title"
+              placeholder="Original title from RSS"
               required
               disabled={saving}
             />
           </div>
 
-          {/* Content Snippet */}
+          {/* Original Content Snippet */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Content Summary
+              Original Content Summary
             </label>
             <textarea
               value={formData.content || ''}
               onChange={(e) => handleInputChange('content', e.target.value)}
               rows={6}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
-              placeholder="Please enter news summary..."
+              placeholder="Summary pulled from RSS feed..."
               disabled={saving}
             />
           </div>

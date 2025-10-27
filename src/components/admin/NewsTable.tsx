@@ -12,9 +12,10 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null)
   const [aiFilter, setAiFilter] = useState<'ALL' | 'TRUE' | 'FALSE'>('ALL')
-  const [activeSort, setActiveSort] = useState<'isoDate' | 'status'>('isoDate')
+  const [activeSort, setActiveSort] = useState<'isoDate' | 'status'>('status')
+  const [languageMode, setLanguageMode] = useState<'EN' | 'KO'>('EN')
   const [dateSortOrder, setDateSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [statusSortOrder, setStatusSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [statusSortOrder, setStatusSortOrder] = useState<'asc' | 'desc'>('desc')
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   
   const { 
@@ -26,7 +27,7 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
     refreshNews, 
     updateParams 
   } = useNewsList({ 
-    sortBy: 'isoDate', 
+    sortBy: 'status', 
     sortOrder: 'desc',
     limit: 10 
   })
@@ -83,6 +84,20 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
         return 'Unknown'
     }
   }
+
+  const getDisplayFields = (news: NewsItem) => {
+    const title = languageMode === 'KO'
+      ? (news.titleKo?.trim() || news.titleEn?.trim() || news.title)
+      : (news.titleEn?.trim() || news.titleKo?.trim() || news.title);
+
+    const contentSource = languageMode === 'KO'
+      ? news.translationKo ?? news.translationEn ?? news.content
+      : news.translationEn ?? news.translationKo ?? news.content;
+
+    const content = (contentSource ?? '').trim();
+
+    return { title, content };
+  };
 
   // Get category style
   const getCategoryStyle = (category: string | null) => {
@@ -185,6 +200,10 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
     updateParams({ page: 1, aiWorth: value === 'TRUE' })
   }
 
+  const handleLanguageChange = (value: 'EN' | 'KO') => {
+    setLanguageMode(value)
+  }
+
   const handleDateSortToggle = () => {
     const nextOrder = dateSortOrder === 'asc' ? 'desc' : 'asc'
     setDateSortOrder(nextOrder)
@@ -270,6 +289,33 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
             </button>
           </div>
         </div>
+        <div className="flex items-center space-x-3">
+          <span className="text-sm font-medium text-gray-700">Language</span>
+          <div className="inline-flex rounded-md border border-gray-200 bg-white shadow-sm">
+            <button
+              onClick={() => handleLanguageChange('EN')}
+              className={`px-3 py-1 text-sm transition-colors duration-200 first:rounded-l-md last:rounded-r-md ${
+                languageMode === 'EN'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isActionDisabled}
+            >
+              English
+            </button>
+            <button
+              onClick={() => handleLanguageChange('KO')}
+              className={`px-3 py-1 text-sm transition-colors duration-200 first:rounded-l-md last:rounded-r-md ${
+                languageMode === 'KO'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isActionDisabled}
+            >
+              Korean
+            </button>
+          </div>
+        </div>
       </div>
       <div className="overflow-x-auto">
         {loading && (
@@ -308,12 +354,13 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
                 </tr>
               ) : (
                 newsList.map((news) => {
-                  const preview = getContentPreview(news.content)
+                  const displayFields = getDisplayFields(news)
+                  const preview = getContentPreview(displayFields.content)
                   return (
                   <tr key={news.id} className="hover:bg-gray-50 transition-colors duration-200">
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900 line-clamp-2">
-                        {news.title}
+                        {displayFields.title}
                       </div>
                       {preview && (
                         <div className="text-xs text-gray-500 mt-1 line-clamp-1">
