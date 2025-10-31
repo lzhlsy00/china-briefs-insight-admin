@@ -51,6 +51,11 @@ export const GET = () => {
       },
       {
         method: 'GET',
+        path: '/api/v1/admin/send-email',
+        description: '获取邮件推送记录（后台管理）',
+      },
+      {
+        method: 'GET',
         path: '/api/v1/public/news',
         description: '获取已发布新闻列表（前台）',
       },
