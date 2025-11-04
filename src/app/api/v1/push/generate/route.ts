@@ -10,7 +10,9 @@ export const POST = async () => {
     const result = await runDigestGenerationJob();
 
     if (!result.created) {
-      const message = result.reason === 'no-news' ? '没有可用的发布新闻' : '未生成推送内容';
+      const message = result.reason === 'no-news'
+        ? 'No published news available for digest.'
+        : 'Digest content was not generated.';
       return successResponse(
         { created: false, reason: result.reason },
         { status: 200, message }
@@ -25,7 +27,7 @@ export const POST = async () => {
         published: result.published,
         items: result.items,
       },
-      { status: 201, message: '推送内容已生成' }
+      { status: 201, message: 'Digest content generated successfully.' }
     );
   } catch (error) {
     return handleRouteError(error);

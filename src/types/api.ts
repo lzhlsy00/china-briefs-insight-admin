@@ -21,6 +21,7 @@ export interface NewsItem {
   aiWorth: boolean | null;
   aiReason: string | null;
   category: string | null;
+  categoryEn?: string | null;
   status: 'DRAFT' | 'PUBLISH';
   translationKo: string | null;
   translationEn: string | null;

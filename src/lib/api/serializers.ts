@@ -14,6 +14,7 @@ type SupabaseNews = {
   'title-ko': string | null;
   'title-en': string | null;
   category: string | null;
+  'category-en'?: string | null;
   status: string;
   created_at?: string;
   updated_at?: string;
@@ -36,6 +37,7 @@ export type SerializedNews = {
   titleKo: string | null;
   titleEn: string | null;
   category: string | null;
+  categoryEn?: string | null;
   status: string;
   createdAt?: string;
   updatedAt?: string;
@@ -58,6 +60,7 @@ export const serializeNews = (news: SupabaseNews): SerializedNews => {
     titleKo: news['title-ko'],
     titleEn: news['title-en'],
     category: news.category,
+    categoryEn: news['category-en'] ?? undefined,
     status: news.status,
     createdAt: news.created_at,
     updatedAt: news.updated_at,

@@ -2,7 +2,7 @@ import { curateTopNews, type CuratedNewsItem } from '@/lib/ai/newsCurator';
 import { supabase } from '@/lib/supabase';
 
 const NEWS_FETCH_LIMIT = 10;
-const DIGEST_TITLE_PREFIX = 'BiteChina 日报';
+const DIGEST_TITLE_PREFIX = 'BiteChina Daily Digest';
 
 type NewsRow = {
   id: number;
@@ -21,7 +21,7 @@ const formatDigest = (
       const safeTitle = item.title.trim();
       const safeSummary = item.summary.trim();
       const lines = [
-        `🔹${index + 1}. ${safeTitle}`,
+        `🔹 ${index + 1}. ${safeTitle}`,
         safeSummary,
         item.link ? ` 👉 Full article: ${item.link}` : ' 👉 Full article',
       ];
@@ -46,6 +46,14 @@ export type DigestJobResult =
       usedNewsIds: number[];
       digestContent: string;
     };
+
+const formatDateForTitle = (value: Date) => {
+  return value.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
 
 export const runDigestGenerationJob = async (): Promise<DigestJobResult> => {
   const { data: rows, error } = await supabase
@@ -94,7 +102,7 @@ export const runDigestGenerationJob = async (): Promise<DigestJobResult> => {
 
   const digestContent = formatDigest(curated);
   const now = new Date();
-  const digestTitle = `${DIGEST_TITLE_PREFIX} - ${now.toLocaleDateString('zh-CN')}`;
+  const digestTitle = `${DIGEST_TITLE_PREFIX} - ${formatDateForTitle(now)}`;
   const isoDate = now.toISOString();
 
   const { data: inserted, error: insertError } = await supabase

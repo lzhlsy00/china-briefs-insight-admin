@@ -23,7 +23,7 @@ export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageP
       setFormData({
         title: newsItem.title,
         content: newsItem.content || '',
-        category: newsItem.category || '',
+        category: newsItem.categoryEn ?? newsItem.category ?? '',
         status: newsItem.status,
         titleKo: newsItem.titleKo ?? '',
         titleEn: newsItem.titleEn ?? '',
