@@ -13,6 +13,17 @@ type NewsRow = {
   category: string | null;
 };
 
+type TemplateRow = {
+  id: number;
+  logo: string | null;
+  title: string | null;
+  subject: string | null;
+  content: string | null;
+  banner: string | null;
+  footer: string | null;
+  is_active: boolean | null;
+};
+
 const formatDigest = (
   items: Array<{ title: string; summary: string; link: string }>
 ): string => {
@@ -100,16 +111,75 @@ export const runDigestGenerationJob = async (): Promise<DigestJobResult> => {
     };
   }
 
+  const fetchTemplate = async (): Promise<TemplateRow | null> => {
+    const activeQuery = await supabase
+      .from('template')
+      .select('id, logo, title, subject, content, banner, footer, is_active')
+      .eq('is_active', true)
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle<TemplateRow>();
+
+    if (activeQuery.error) {
+      throw activeQuery.error;
+    }
+
+    if (activeQuery.data) {
+      return activeQuery.data;
+    }
+
+    const latestQuery = await supabase
+      .from('template')
+      .select('id, logo, title, subject, content, banner, footer, is_active')
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle<TemplateRow>();
+
+    if (latestQuery.error) {
+      throw latestQuery.error;
+    }
+
+    return latestQuery.data ?? null;
+  };
+
+  const template = await fetchTemplate();
+
+  if (!template) {
+    throw new Error('No template available for digest generation');
+  }
+
   const digestContent = formatDigest(curated);
   const now = new Date();
   const digestTitle = `${DIGEST_TITLE_PREFIX} - ${formatDateForTitle(now)}`;
   const isoDate = now.toISOString();
+  const nowDate = isoDate.slice(0, 10);
+
+  const applyPlaceholders = (value: string | null | undefined): string | null => {
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const replaced = value.replaceAll('{{date}}', nowDate).trim();
+    return replaced.length > 0 ? replaced : null;
+  };
+
+  const appliedContent = digestContent;
+
+  const pushTitle = applyPlaceholders(template.title) ?? digestTitle;
+  const pushSubject = applyPlaceholders(template.subject) ?? digestTitle;
+  const pushLogo = applyPlaceholders(template.logo);
+  const pushBanner = applyPlaceholders(template.banner);
+  const pushFooter = applyPlaceholders(template.footer);
 
   const { data: inserted, error: insertError } = await supabase
     .from('push_content')
     .insert({
-      title: digestTitle,
-      content: digestContent,
+      title: pushTitle,
+      subject: pushSubject,
+      logo: pushLogo,
+      banner: pushBanner,
+      footer: pushFooter,
+      content: appliedContent,
       date: isoDate,
       published: false,
     })
@@ -140,6 +210,6 @@ export const runDigestGenerationJob = async (): Promise<DigestJobResult> => {
     date: inserted?.date ?? isoDate,
     published: inserted?.published ?? false,
     usedNewsIds,
-    digestContent,
+    digestContent: appliedContent,
   };
 };

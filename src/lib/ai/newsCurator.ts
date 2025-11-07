@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { buildNewsPermalink } from '@/lib/newsLinks';
 
 export type SourceNewsItem = {
   id: number;
@@ -18,9 +19,15 @@ export type CuratedNewsItem = {
 
 const DIGEST_COUNT = 5;
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
-const ARTICLE_BASE_URL = 'https://www.bitechina.com/article';
 
-const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, '');
+const OPENAI_BASE_URL = (process.env.OPENAI_API_BASE ?? process.env.OPENAI_BASE_URL)?.replace(/\/$/, '');
+
+const requireOpenAIBaseUrl = () => {
+  if (!OPENAI_BASE_URL) {
+    throw new Error('OPENAI_BASE_URL 未配置，无法调用模型服务');
+  }
+  return OPENAI_BASE_URL;
+};
 
 const curatedSchema = z.object({
   items: z
@@ -67,8 +74,6 @@ const truncate = (value: string, length: number) => {
   return `${value.slice(0, length - 1)}…`;
 };
 
-const buildArticleLink = (id: number) => `${ARTICLE_BASE_URL}/${id}`;
-
 const buildBaseSummary = ({ content, aiReason }: SourceNewsItem) => {
   const source = normalizeWhitespace(content ?? aiReason ?? '');
   if (!source) {
@@ -89,7 +94,7 @@ const fallbackSelection = (items: PreparedNews[]): CuratedNewsItem[] => {
     id: item.id,
     title: item.title,
     summary: item.baseSummary,
-    link: buildArticleLink(item.id),
+    link: buildNewsPermalink(item.id),
   }));
 };
 
@@ -113,7 +118,7 @@ const buildPrompt = (items: PreparedNews[]) => {
     id: item.id,
     title: item.title,
     category: item.category ?? null,
-    link: item.link,
+    link: buildNewsPermalink(item.id),
     summary: item.baseSummary,
   }));
 
@@ -145,7 +150,8 @@ const translateItemsToEnglish = async (items: CuratedNewsItem[], apiKey: string)
   }
 
   try {
-    const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+    const baseUrl = requireOpenAIBaseUrl()
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -229,7 +235,7 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
       title: normalizeWhitespace(item.title) || `Story ${item.id}`,
       summary:
         normalizeWhitespace(item.summary) || 'Summary pending translation. Please review the full article on BiteChina.',
-      link: item.link,
+      link: buildNewsPermalink(item.id),
     }));
   }
 
@@ -252,7 +258,8 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
   };
 
   try {
-    const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+    const baseUrl = requireOpenAIBaseUrl()
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -270,7 +277,7 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
         title: normalizeWhitespace(item.title) || `Story ${item.id}`,
         summary:
           normalizeWhitespace(item.summary) || 'Summary pending translation. Please review the full article on BiteChina.',
-        link: item.link,
+        link: buildNewsPermalink(item.id),
       }));
     }
 
@@ -308,7 +315,7 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
           id: source.id,
           title: rawTitle,
           summary: rawSummary,
-          link: buildArticleLink(source.id),
+          link: buildNewsPermalink(source.id),
         });
 
         if (collected.length >= limit) {
@@ -339,7 +346,7 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
         id: item.id,
         title: truncate(safeTitle, 120),
         summary: truncate(safeSummary, 200),
-        link: item.link,
+        link: buildNewsPermalink(item.id),
       };
     });
   } catch (error) {
@@ -350,7 +357,7 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
       title: normalizeWhitespace(item.title) || `Story ${item.id}`,
       summary:
         normalizeWhitespace(item.summary) || 'Summary pending translation. Please review the full article on BiteChina.',
-      link: item.link,
+      link: buildNewsPermalink(item.id),
     }));
   }
 };

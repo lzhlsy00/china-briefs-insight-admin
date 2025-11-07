@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useSendEmailLogs } from '@/hooks/useSendEmailLogs'
 
 const formatDateTime = (value?: string | null) => {
@@ -16,23 +16,88 @@ const formatDateTime = (value?: string | null) => {
   return date.toLocaleString()
 }
 
-const DeliveryStatus = ({ delivered }: { delivered: boolean | null }) => {
-  const status = delivered === true ? 'Delivered' : delivered === false ? 'Failed' : 'Unknown'
-  const style = delivered === true
-    ? 'bg-green-100 text-green-700'
-    : delivered === false
-      ? 'bg-red-100 text-red-700'
-      : 'bg-gray-100 text-gray-700'
+type DeliveryState = boolean | 'mixed' | null
+
+const DeliveryStatus = ({ delivered }: { delivered: DeliveryState }) => {
+  let label = 'Unknown'
+  let style = 'bg-gray-100 text-gray-700'
+
+  if (delivered === true) {
+    label = 'Delivered'
+    style = 'bg-green-100 text-green-700'
+  } else if (delivered === false) {
+    label = 'Failed'
+    style = 'bg-red-100 text-red-700'
+  } else if (delivered === 'mixed') {
+    label = 'Mixed'
+    style = 'bg-yellow-100 text-yellow-700'
+  }
 
   return (
     <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded ${style}`}>
-      {status}
+      {label}
     </span>
   )
 }
 
 export const SendEmailTable = () => {
   const { records, loading, error, pagination, setPage, reload } = useSendEmailLogs()
+  const [modalInfo, setModalInfo] = useState<{ title: string; emails: string[] } | null>(null)
+
+  const groupedRecords = useMemo(() => {
+    const map = new Map<string, {
+      title: string
+      latestTimestamp: number | null
+      latestRawDate: string | null
+      deliveryStates: Array<boolean | null>
+      emails: string[]
+    }>()
+
+    records.forEach((record) => {
+      const groupKey = record.title ?? 'Untitled'
+      const existing = map.get(groupKey)
+      const timestamp = record.date ? new Date(record.date).getTime() : null
+
+      if (existing) {
+        if (timestamp !== null && !Number.isNaN(timestamp)) {
+          if (existing.latestTimestamp === null || timestamp > existing.latestTimestamp) {
+            existing.latestTimestamp = timestamp
+            existing.latestRawDate = record.date
+          }
+        }
+        existing.deliveryStates.push(record.isDelivered)
+        existing.emails.push(record.userMail ?? '-')
+      } else {
+        map.set(groupKey, {
+          title: groupKey,
+          latestTimestamp: timestamp !== null && !Number.isNaN(timestamp) ? timestamp : null,
+          latestRawDate: timestamp !== null && !Number.isNaN(timestamp) ? record.date : null,
+          deliveryStates: [record.isDelivered],
+          emails: [record.userMail ?? '-'],
+        })
+      }
+    })
+
+    return Array.from(map.values()).map((group) => {
+      const hasDelivered = group.deliveryStates.some((state) => state === true)
+      const hasFailed = group.deliveryStates.some((state) => state === false)
+
+      const delivered: DeliveryState = hasDelivered && hasFailed
+        ? 'mixed'
+        : hasDelivered
+          ? true
+          : hasFailed
+            ? false
+            : null
+
+      return {
+        title: group.title,
+        date: group.latestRawDate,
+        delivered,
+        emails: group.emails,
+      }
+    })
+  }, [records])
 
   const tableContent = useMemo(() => {
     if (loading) {
@@ -62,7 +127,7 @@ export const SendEmailTable = () => {
       )
     }
 
-    if (records.length === 0) {
+    if (groupedRecords.length === 0) {
       return (
         <tr>
           <td colSpan={4} className="px-6 py-6 text-center text-gray-500">
@@ -72,17 +137,25 @@ export const SendEmailTable = () => {
       )
     }
 
-    return records.map((record, index) => (
-      <tr key={`${record.userMail}-${record.createdAt}-${index}`} className="hover:bg-gray-50">
-        <td className="px-6 py-4 text-sm text-gray-700">{record.userMail ?? '-'}</td>
-        <td className="px-6 py-4 text-sm text-gray-900 font-medium">{record.title ?? 'Untitled'}</td>
-        <td className="px-6 py-4 text-sm text-gray-500">{formatDateTime(record.date)}</td>
+    return groupedRecords.map((group) => (
+      <tr key={group.title} className="hover:bg-gray-50">
+        <td className="px-6 py-4 text-sm text-gray-900 font-medium">{group.title}</td>
+        <td className="px-6 py-4 text-sm text-gray-500">{formatDateTime(group.date)}</td>
         <td className="px-6 py-4">
-          <DeliveryStatus delivered={record.isDelivered} />
+          <DeliveryStatus delivered={group.delivered} />
+        </td>
+        <td className="px-6 py-4 text-sm">
+          <button
+            type="button"
+            onClick={() => setModalInfo({ title: group.title, emails: group.emails })}
+            className="px-3 py-1 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+          >
+            查看
+          </button>
         </td>
       </tr>
     ))
-  }, [records, loading, error, reload])
+  }, [groupedRecords, loading, error, reload])
 
   const goToPage = (target: number) => {
     if (target < 1 || target > pagination.totalPages) {
@@ -97,10 +170,10 @@ export const SendEmailTable = () => {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User Email</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Title</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Delivery Status</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User Email</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -132,7 +205,40 @@ export const SendEmailTable = () => {
           </button>
         </div>
       </div>
+
+      {modalInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
+              <h2 className="text-lg font-semibold text-gray-900">{modalInfo.title} · 用户邮箱</h2>
+              <button
+                type="button"
+                onClick={() => setModalInfo(null)}
+                className="text-gray-500 hover:text-gray-700"
+                aria-label="关闭"
+              >
+                ×
+              </button>
+            </div>
+            <div className="max-h-64 overflow-y-auto px-5 py-4 space-y-2">
+              {modalInfo.emails.map((email, index) => (
+                <div key={`${email}-${index}`} className="text-sm text-gray-700">
+                  {email}
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end border-t border-gray-200 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setModalInfo(null)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded hover:bg-gray-200"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-

@@ -48,6 +48,8 @@ Create an `.env` file (see `.env.example`) with the following variables:
 - `OPENAI_API_KEY` – 生成每日推送摘要所需的密钥，未设置时将退化为简单排序。
 - `OPENAI_MODEL` – 可选，自定义使用的模型（默认 `gpt-4o-mini`）。
 - `OPENAI_BASE_URL` – 可选，接入 OpenAI 兼容服务时指定自定义 Base URL。
+- `SITE_NEWS_BASE_URL` – 服务器端用于生成站内新闻永久链接的基础地址（默认为 `https://www.bitechina.com/article`）。
+- `NEXT_PUBLIC_SITE_NEWS_BASE_URL` – 前端用于生成同一链接的公开变量，留空则与 `SITE_NEWS_BASE_URL` 保持一致。
 
 ## Useful Commands
 
