@@ -34,7 +34,7 @@ export const GET = async () => {
     // 获取总数
     const { count: totalPending } = await supabase
       .from('news')
-      .select('*', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })  
       .is('ai_worth', null);
 
     return successResponse(

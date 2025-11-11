@@ -23,6 +23,7 @@ type TemplateOption = {
 
 type NewsItem = {
   id: number
+  slug: string | null
   isoDate: string | null
   titleEn: string | null
   titleKo: string | null
@@ -38,6 +39,7 @@ type PushContentForm = {
   footer: string
   content: string
   date: string
+  local: string
 }
 
 const initialForm: PushContentForm = {
@@ -48,6 +50,7 @@ const initialForm: PushContentForm = {
   footer: '',
   content: '',
   date: '',
+  local: 'zh-CN',
 }
 
 export default function PushContentCreatePage() {
@@ -176,6 +179,7 @@ export default function PushContentCreatePage() {
 
         const list = (body.data?.news ?? []).map((item) => ({
           id: Number(item.id),
+          slug: typeof item.slug === 'string' ? item.slug.trim() || null : null,
           isoDate: (item.isoDate as string | null) ?? null,
           titleEn: (item.titleEn as string | null) ?? (item['title-en'] as string | null) ?? (item.title as string | null) ?? null,
           titleKo: (item.titleKo as string | null) ?? (item['title-ko'] as string | null) ?? null,
@@ -243,21 +247,35 @@ export default function PushContentCreatePage() {
     setNewsGenerating(true)
 
     const selected = newsItems.filter((item) => newsSelected.includes(item.id))
-    const entries = selected.map((item) => {
-      const rawTitle = newsLanguage === 'EN' ? item.titleEn ?? item.titleKo ?? '' : item.titleKo ?? item.titleEn ?? ''
-      const rawTranslation = newsLanguage === 'EN' ? item.translationEn ?? item.translationKo ?? '' : item.translationKo ?? item.translationEn ?? ''
-      const safeTitle = rawTitle.replace(/\s+/g, ' ').trim() || '无标题'
-      const normalizedTranslation = rawTranslation.replace(/\s+/g, ' ').trim()
-      const safeTranslation = normalizedTranslation === '' ? '无摘要' : normalizedTranslation
-      const permalink = buildNewsPermalink(item.id)
-      return `"${safeTitle}"\n"${safeTranslation}"\n链接：${permalink}`
-    })
+    const entries = selected
+      .map((item) => {
+        const slugValue = item.slug?.trim()
+        if (!slugValue) {
+          console.warn('[push-content] 选中的新闻缺少 slug', item.id)
+          return null
+        }
+        const rawTitle = newsLanguage === 'EN' ? item.titleEn ?? item.titleKo ?? '' : item.titleKo ?? item.titleEn ?? ''
+        const rawTranslation = newsLanguage === 'EN' ? item.translationEn ?? item.translationKo ?? '' : item.translationKo ?? item.translationEn ?? ''
+        const safeTitle = rawTitle.replace(/\s+/g, ' ').trim() || '无标题'
+        const normalizedTranslation = rawTranslation.replace(/\s+/g, ' ').trim()
+        const safeTranslation = normalizedTranslation === '' ? '无摘要' : normalizedTranslation
+        const permalink = buildNewsPermalink(item.id, slugValue)
+        return `"${safeTitle}"\n"${safeTranslation}"\n链接：${permalink}`
+      })
+      .filter((entry): entry is string => Boolean(entry))
+
+    if (entries.length === 0) {
+      setNewsGenerating(false)
+      setNewsError('所选新闻缺少 slug，无法生成链接，请返回列表重新选择。')
+      return
+    }
 
     const generated = `${entries.join('\n\n')}\n\n根据以上内容生成`
 
     setForm((prev) => ({
       ...prev,
       content: prev.content.trim() ? `${prev.content.trimEnd()}\n\n${generated}` : generated,
+      local: newsLanguage,
     }))
 
     setNewsGenerating(false)
@@ -294,6 +312,7 @@ export default function PushContentCreatePage() {
       footer: applyDatePlaceholder(form.footer),
       prompt: form.content,
       date: nowIso,
+      local: form.local || 'zh-CN',
     }
 
     setSaving(true)
@@ -432,6 +451,19 @@ export default function PushContentCreatePage() {
                   onChange={(event) => handleChange('title', event.target.value)}
                   className={baseInput}
                   placeholder="推送标题"
+                  disabled={saving}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">Locale</label>
+                <input
+                  type="text"
+                  value={form.local}
+                  onChange={(event) => handleChange('local', event.target.value)}
+                  className={baseInput}
+                  placeholder="例如：zh-CN、en-US"
                   disabled={saving}
                   required
                 />

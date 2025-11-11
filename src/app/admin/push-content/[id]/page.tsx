@@ -20,6 +20,7 @@ type PushContentRecord = {
   content: string | null
   date: string | null
   published: boolean | null
+  local: string | null
 }
 
 type PushContentForm = {
@@ -30,6 +31,7 @@ type PushContentForm = {
   footer: string
   content: string
   date: string
+  local: string
 }
 
 type PageProps = {
@@ -44,6 +46,7 @@ const initialFormState: PushContentForm = {
   footer: '',
   content: '',
   date: '',
+  local: 'zh-CN',
 }
 
 const normalizeString = (value: string | null | undefined) => value ?? ''
@@ -118,6 +121,7 @@ export default function PushContentDetailPage({ params }: PageProps) {
           footer: normalizeString(record.footer),
           content: normalizeString(record.content),
           date: toDatetimeLocal(record.date),
+          local: normalizeString(record.local) || 'zh-CN',
         })
         setPublished(typeof record.published === 'boolean' ? record.published : null)
       } catch (fetchError) {
@@ -166,6 +170,7 @@ export default function PushContentDetailPage({ params }: PageProps) {
           footer: form.footer || null,
           content: form.content,
           date: form.date ? new Date(form.date).toISOString() : null,
+          local: form.local || 'zh-CN',
         }),
       })
 
@@ -274,6 +279,18 @@ export default function PushContentDetailPage({ params }: PageProps) {
                 placeholder="推送标题"
                 disabled={saving || loading}
                 required
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Locale</label>
+              <input
+                type="text"
+                value={form.local}
+                onChange={(event) => handleChange('local', event.target.value)}
+                className={baseInput}
+                placeholder="例如：zh-CN、en-US"
+                disabled={saving || loading}
               />
             </div>
 

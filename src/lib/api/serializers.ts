@@ -1,6 +1,7 @@
 // Supabase 返回的 News 类型（snake_case）
 type SupabaseNews = {
   id: number;
+  slug?: string | null;
   title: string;
   iso_date: string;
   link: string;
@@ -24,6 +25,7 @@ type SupabaseNews = {
 // 序列化后的 News 类型（camelCase）
 export type SerializedNews = {
   id: number;
+  slug?: string | null;
   title: string;
   isoDate: string;
   link: string;
@@ -47,6 +49,7 @@ export type SerializedNews = {
 export const serializeNews = (news: SupabaseNews): SerializedNews => {
   return {
     id: news.id,
+    slug: typeof news.slug === 'string' ? news.slug : null,
     title: news.title,
     isoDate: news.iso_date,
     link: news.link,

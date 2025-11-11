@@ -16,6 +16,7 @@ type PushContentRecord = {
   title: string | null
   date: string | null
   published: boolean | null
+  local: string | null
 }
 
 const formatDate = (value: string | null | undefined) => {
@@ -45,6 +46,14 @@ const formatPublished = (value: boolean | null | undefined) => {
     return '未发布'
   }
   return '—'
+}
+
+const formatLocal = (value: string | null | undefined) => {
+  if (!value) {
+    return '—'
+  }
+
+  return value
 }
 
 export default function PushContentPage() {
@@ -99,6 +108,7 @@ export default function PushContentPage() {
           title: typeof item.title === 'string' ? item.title : null,
           date: typeof item.date === 'string' ? item.date : null,
           published: typeof item.published === 'boolean' ? item.published : null,
+          local: typeof item.local === 'string' ? item.local : null,
         }))
 
         setRecords(list)
@@ -257,6 +267,7 @@ export default function PushContentPage() {
                       <tr>
                         <th className={thClass}>Title</th>
                         <th className={thClass}>Date</th>
+                        <th className={thClass}>Locale</th>
                         <th className={thClass}>Published</th>
                         <th className={`${thClass} text-center`}>
                           <span className="sr-only">操作</span>
@@ -268,6 +279,7 @@ export default function PushContentPage() {
                         <tr key={item.id} className="hover:bg-gray-50">
                           <td className={`${tdClass} font-medium text-gray-900`}>{item.title ?? '—'}</td>
                           <td className={tdClass}>{formatDate(item.date)}</td>
+                          <td className={tdClass}>{formatLocal(item.local)}</td>
                           <td className={tdClass}>{formatPublished(item.published)}</td>
                           <td className={`${tdClass} text-center`}>
                             <div className="mx-auto flex w-fit items-center justify-center gap-2">

@@ -57,10 +57,13 @@ if (!globalWithScheduler.__pushDigestJobStarted && process.env.NODE_ENV !== 'tes
           return;
         }
 
-        console.info('[push-digest] success', {
-          contentId: result.contentId,
-          usedNewsIds: result.usedNewsIds,
-        });
+        for (const digest of result.digests) {
+          console.info('[push-digest] success', {
+            locale: digest.locale,
+            contentId: digest.contentId,
+            usedNewsIds: result.usedNewsIds,
+          });
+        }
       } catch (error) {
         console.error('[push-digest] failed', error);
       }

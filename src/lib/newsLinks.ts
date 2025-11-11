@@ -11,9 +11,17 @@ const resolveSiteBaseUrl = () => {
   return stripTrailingSlash(process.env.NEXT_PUBLIC_SITE_NEWS_BASE_URL ?? DEFAULT_SITE_NEWS_BASE_URL);
 };
 
-export const buildNewsPermalink = (id: number) => {
+const requireSlug = (slug: string | null | undefined, id: number) => {
+  const trimmed = typeof slug === 'string' ? slug.trim() : '';
+  if (!trimmed) {
+    throw new Error(`新闻 ${id} 缺少 slug，无法生成站内链接`);
+  }
+  return trimmed;
+};
+
+export const buildNewsPermalink = (id: number, slug: string | null | undefined) => {
   const base = resolveSiteBaseUrl();
-  return `${base}/${id}`;
+  return `${base}/${requireSlug(slug, id)}`;
 };
 
 export const SITE_NEWS_BASE_URL = resolveSiteBaseUrl();

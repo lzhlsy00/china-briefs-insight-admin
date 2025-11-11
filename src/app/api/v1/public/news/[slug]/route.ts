@@ -7,25 +7,25 @@ import { z } from 'zod';
 
 type RouteContext = {
   params: Promise<{
-    id: string;
+    slug: string;
   }>;
 };
 
-const idSchema = z.coerce.number().int().min(1, '新闻ID必须是正整数');
+const slugSchema = z.string().min(1, '新闻 slug 不能为空');
 
-const parseId = async (context: RouteContext) => {
-  const { id } = await context.params;
-  return idSchema.parse(id);
+const resolveSlug = async (context: RouteContext) => {
+  const { slug } = await context.params;
+  return slugSchema.parse(slug.trim());
 };
 
 export const GET = async (request: NextRequest, context: RouteContext) => {
   try {
-    const id = await parseId(context);
+    const slug = await resolveSlug(context);
 
     const { data: news, error } = await supabase
       .from('news')
       .select('*')
-      .eq('id', id)
+      .eq('slug', slug)
       .eq('status', 'PUBLISH')
       .single();
 

@@ -20,12 +20,21 @@ const requestSchema = z.object({
     .refine((value) => !value || !Number.isNaN(Date.parse(value)), {
       message: '日期格式不正确，应为 ISO8601 格式',
     }),
+  local: z.string().trim().min(1).max(32).optional().nullable(),
 })
 
 const sanitizeOptional = (value: string | null | undefined) => {
   if (value == null) return null
   const trimmed = value.trim()
   return trimmed === '' ? null : trimmed
+}
+
+const sanitizeLocale = (value?: string | null) => {
+  if (value == null) {
+    return 'zh-CN'
+  }
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : 'zh-CN'
 }
 
 export const dynamic = 'force-dynamic'
@@ -47,12 +56,13 @@ export const POST = async (request: NextRequest) => {
       content: generatedContent,
       date: payload.date ? new Date(payload.date).toISOString() : new Date().toISOString(),
       published: false,
+      local: sanitizeLocale(payload.local),
     }
 
     const { data, error } = await supabase
       .from('push_content')
       .insert(insertPayload)
-      .select('id, title, subject, logo, banner, footer, content, date, published')
+      .select('id, title, subject, logo, banner, footer, content, date, published, local')
       .single()
 
     if (error) {

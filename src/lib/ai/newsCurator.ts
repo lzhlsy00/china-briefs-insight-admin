@@ -3,6 +3,7 @@ import { buildNewsPermalink } from '@/lib/newsLinks';
 
 export type SourceNewsItem = {
   id: number;
+  slug: string | null;
   title: string;
   link: string;
   content?: string | null;
@@ -94,7 +95,7 @@ const fallbackSelection = (items: PreparedNews[]): CuratedNewsItem[] => {
     id: item.id,
     title: item.title,
     summary: item.baseSummary,
-    link: buildNewsPermalink(item.id),
+    link: buildNewsPermalink(item.id, item.slug),
   }));
 };
 
@@ -118,7 +119,7 @@ const buildPrompt = (items: PreparedNews[]) => {
     id: item.id,
     title: item.title,
     category: item.category ?? null,
-    link: buildNewsPermalink(item.id),
+    link: buildNewsPermalink(item.id, item.slug),
     summary: item.baseSummary,
   }));
 
@@ -235,7 +236,7 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
       title: normalizeWhitespace(item.title) || `Story ${item.id}`,
       summary:
         normalizeWhitespace(item.summary) || 'Summary pending translation. Please review the full article on BiteChina.',
-      link: buildNewsPermalink(item.id),
+      link: item.link,
     }));
   }
 
@@ -277,7 +278,7 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
         title: normalizeWhitespace(item.title) || `Story ${item.id}`,
         summary:
           normalizeWhitespace(item.summary) || 'Summary pending translation. Please review the full article on BiteChina.',
-        link: buildNewsPermalink(item.id),
+        link: item.link,
       }));
     }
 
@@ -315,7 +316,7 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
           id: source.id,
           title: rawTitle,
           summary: rawSummary,
-          link: buildNewsPermalink(source.id),
+          link: buildNewsPermalink(source.id, source.slug),
         });
 
         if (collected.length >= limit) {
@@ -346,7 +347,7 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
         id: item.id,
         title: truncate(safeTitle, 120),
         summary: truncate(safeSummary, 200),
-        link: buildNewsPermalink(item.id),
+        link: item.link,
       };
     });
   } catch (error) {
@@ -357,7 +358,7 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
       title: normalizeWhitespace(item.title) || `Story ${item.id}`,
       summary:
         normalizeWhitespace(item.summary) || 'Summary pending translation. Please review the full article on BiteChina.',
-      link: buildNewsPermalink(item.id),
+      link: item.link,
     }));
   }
 };

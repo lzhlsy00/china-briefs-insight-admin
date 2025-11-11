@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { handleRouteError } from '@/lib/api/error'
 import { errorResponse, successResponse } from '@/lib/api/response'
 
-const FIELDS = 'id, title, subject, logo, banner, footer, content, date, published'
+const FIELDS = 'id, title, subject, logo, banner, footer, content, date, published, local'
 
 type RouteContext = {
   params: Promise<{
@@ -27,6 +27,7 @@ const updateSchema = z
     content: z.string().trim().min(1, '正文不能为空').optional(),
     date: dateSchema.optional().nullable(),
     published: z.boolean().optional(),
+    local: z.string().trim().min(1).max(32).optional().nullable(),
   })
   .refine((data) => Object.values(data).some((value) => value !== undefined), {
     message: '至少需要提供一个字段进行更新',
@@ -45,6 +46,7 @@ const buildUpdateBody = (input: UpdatePayload): Record<string, unknown> => {
   if (input.content !== undefined) payload.content = input.content
   if (input.date !== undefined) payload.date = input.date ?? null
   if (input.published !== undefined) payload.published = input.published
+  if (input.local !== undefined) payload.local = input.local?.trim()?.length ? input.local.trim() : 'zh-CN'
 
   return payload
 }

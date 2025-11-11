@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { handleRouteError } from '@/lib/api/error'
 import { successResponse } from '@/lib/api/response'
 
-const FIELDS = 'id, title, subject, logo, banner, footer, content, date, published'
+const FIELDS = 'id, title, subject, logo, banner, footer, content, date, published, local'
 
 const createSchema = z.object({
   title: z.string().trim().min(1),
@@ -14,7 +14,17 @@ const createSchema = z.object({
   footer: z.string().trim().optional().nullable(),
   content: z.string().trim().min(1),
   date: z.string().trim().optional().nullable(),
+  local: z.string().trim().min(1).max(32).optional().nullable(),
 })
+
+const sanitizeLocale = (value?: string | null) => {
+  if (value == null) {
+    return 'zh-CN'
+  }
+
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : 'zh-CN'
+}
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -23,7 +33,7 @@ export const GET = async () => {
   try {
     const { data, error } = await supabase
       .from('push_content')
-      .select('id, title, date, published')
+      .select('id, title, date, published, local')
       .order('date', { ascending: false, nullsFirst: false })
 
     if (error) {
@@ -44,7 +54,7 @@ export const POST = async (request: NextRequest) => {
       return handleRouteError(payload.error)
     }
 
-    const { title, subject, logo, banner, footer, content, date } = payload.data
+    const { title, subject, logo, banner, footer, content, date, local } = payload.data
     const insertPayload = {
       title,
       subject: subject ?? null,
@@ -54,6 +64,7 @@ export const POST = async (request: NextRequest) => {
       content,
       date: date ?? new Date().toISOString(),
       published: false,
+      local: sanitizeLocale(local),
     }
 
     const { data, error } = await supabase
