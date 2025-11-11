@@ -34,8 +34,8 @@ export const GET = async (request: NextRequest, context: RouteContext) => {
     }
 
     // 转换字段名为驼峰命名，移除 ai_reason
-    const { 
-      ai_reason,
+    const {
+      ai_reason: _aiReason,
       iso_date,
       ai_worth,
       ai_reason_en,
@@ -44,8 +44,10 @@ export const GET = async (request: NextRequest, context: RouteContext) => {
       'translation-en': translationEn,
       'title-ko': titleKo,
       'title-en': titleEn,
-      ...rest 
+      ...rest
     } = news;
+
+    void _aiReason;
 
     const response = {
       ...rest,

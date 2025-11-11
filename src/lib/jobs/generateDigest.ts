@@ -141,6 +141,8 @@ export type DigestJobResult =
       usedNewsIds: number[];
     };
 
+type SuccessfulDigestJobResult = Extract<DigestJobResult, { created: true }>;
+
 const formatDateForTitle = (value: Date) => {
   return value.toLocaleDateString('en-US', {
     year: 'numeric',
@@ -189,23 +191,24 @@ export const runDigestGenerationJob = async (): Promise<DigestJobResult> => {
 
   const newsMap = new Map(localizedNews.map((item) => [item.id, item]));
 
-  const newsForCurator = localizedNews
-    .map((item) => {
-      const slug = typeof item.slug === 'string' ? item.slug.trim() : '';
-      if (!slug) {
-        return null;
-      }
-      return {
-        id: item.id,
-        slug,
-        title: item.titleEn ?? item.title ?? `Story ${item.id}`,
-        link: item.link ?? '',
-        content: item.summaryEn ?? item.summaryKo ?? item.aiReason ?? null,
-        aiReason: item.aiReason ?? null,
-        category: item.category ?? null,
-      } satisfies SourceNewsItem;
-    })
-    .filter((item): item is SourceNewsItem => item !== null);
+  const newsForCurator: SourceNewsItem[] = [];
+
+  for (const item of localizedNews) {
+    const slugValue = typeof item.slug === 'string' ? item.slug.trim() : '';
+    if (!slugValue) {
+      continue;
+    }
+
+    newsForCurator.push({
+      id: item.id,
+      slug: slugValue,
+      title: item.titleEn ?? item.title ?? `Story ${item.id}`,
+      link: item.link ?? '',
+      content: item.summaryEn ?? item.summaryKo ?? item.aiReason ?? null,
+      aiReason: item.aiReason ?? null,
+      category: item.category ?? null,
+    });
+  }
   const curated = await curateTopNews(newsForCurator);
 
   if (curated.length === 0) {
@@ -276,7 +279,7 @@ export const runDigestGenerationJob = async (): Promise<DigestJobResult> => {
 
   const usedNewsIds = curated.map((item) => item.id);
 
-  const digests: DigestJobResult['digests'] = [];
+  const digests: SuccessfulDigestJobResult['digests'] = [];
 
   for (const locale of DIGEST_LOCALES) {
     const digestContent = formatDigest(

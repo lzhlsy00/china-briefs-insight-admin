@@ -13,8 +13,6 @@ const querySchema = z.object({
   latest: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
 });
 
-type PublicNewsQuery = z.infer<typeof querySchema>;
-
 export const GET = async (request: NextRequest) => {
   try {
     const params = Object.fromEntries(
@@ -68,8 +66,8 @@ export const GET = async (request: NextRequest) => {
 
     // 序列化数据：转换字段名为驼峰命名，移除 ai_reason
     const serialized = (news || []).map((item) => {
-      const { 
-        ai_reason, 
+      const {
+        ai_reason: _aiReason,
         iso_date,
         ai_worth,
         ai_reason_en,
@@ -78,8 +76,10 @@ export const GET = async (request: NextRequest) => {
         'translation-en': translationEn,
         'title-ko': titleKo,
         'title-en': titleEn,
-        ...rest 
+        ...rest
       } = item;
+
+      void _aiReason;
       
       return {
         ...rest,
