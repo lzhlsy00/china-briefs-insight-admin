@@ -12,6 +12,7 @@ const querySchema = z.object({
   status: z.enum(['DRAFT', 'PUBLISH']).optional(),
   title: z.string().min(1).max(1000).optional(),
   aiWorth: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+  language: z.enum(['EN', 'KO']).optional(),
   sortBy: z.enum(['id', 'title', 'isoDate', 'category', 'status', 'aiWorth']).default('id'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
@@ -47,6 +48,15 @@ export const GET = async (request: NextRequest) => {
     }
     if (query.aiWorth !== undefined) {
       supabaseQuery = supabaseQuery.eq('ai_worth', query.aiWorth);
+    }
+    if (query.language === 'EN') {
+      supabaseQuery = supabaseQuery
+        .not('title-en', 'is', null)
+        .neq('title-en', '');
+    } else if (query.language === 'KO') {
+      supabaseQuery = supabaseQuery
+        .not('title-ko', 'is', null)
+        .neq('title-ko', '');
     }
 
     // 排序

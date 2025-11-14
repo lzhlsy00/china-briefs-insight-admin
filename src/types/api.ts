@@ -75,6 +75,7 @@ export interface NewsListParams extends Record<string, string | number | boolean
   status?: 'DRAFT' | 'PUBLISH';
   title?: string;
   aiWorth?: boolean;
+  language?: 'EN' | 'KO';
   sortBy?: 'id' | 'title' | 'isoDate' | 'category' | 'status' | 'aiWorth';
   sortOrder?: 'asc' | 'desc';
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NewsItem } from '@/types/api'
 import { useNewsList, useNewsApi } from '@/hooks/useNewsApi'
 
@@ -13,7 +13,7 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
   const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null)
   const [aiFilter, setAiFilter] = useState<'ALL' | 'TRUE' | 'FALSE'>('ALL')
   const [activeSort, setActiveSort] = useState<'isoDate' | 'status'>('status')
-  const [languageMode, setLanguageMode] = useState<'EN' | 'KO'>('EN')
+  const [languageMode, setLanguageMode] = useState<'ALL' | 'EN' | 'KO'>('ALL')
   const [dateSortOrder, setDateSortOrder] = useState<'asc' | 'desc'>('desc')
   const [statusSortOrder, setStatusSortOrder] = useState<'asc' | 'desc'>('desc')
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
@@ -86,11 +86,13 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
   }
 
   const getDisplayFields = (news: NewsItem) => {
-    const title = languageMode === 'KO'
+    const displayLanguage = languageMode === 'KO' ? 'KO' : 'EN'
+
+    const title = displayLanguage === 'KO'
       ? (news.titleKo?.trim() || news.titleEn?.trim() || news.title)
       : (news.titleEn?.trim() || news.titleKo?.trim() || news.title);
 
-    const contentSource = languageMode === 'KO'
+    const contentSource = displayLanguage === 'KO'
       ? news.translationKo ?? news.translationEn ?? news.content
       : news.translationEn ?? news.translationKo ?? news.content;
 
@@ -200,9 +202,28 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
     updateParams({ page: 1, aiWorth: value === 'TRUE' })
   }
 
-  const handleLanguageChange = (value: 'EN' | 'KO') => {
+  const handleLanguageChange = (value: 'ALL' | 'EN' | 'KO') => {
     setLanguageMode(value)
+    updateParams({
+      page: 1,
+      language: value === 'ALL' ? undefined : value,
+    })
   }
+
+  const filteredNewsList = useMemo(() => {
+    if (!newsList || newsList.length === 0) return []
+
+    if (languageMode === 'ALL') {
+      return newsList
+    }
+
+    const normalize = (value?: string | null) => (value ?? '').trim()
+    const predicate = languageMode === 'KO'
+      ? (item: NewsItem) => Boolean(normalize(item.titleKo))
+      : (item: NewsItem) => Boolean(normalize(item.titleEn))
+
+    return newsList.filter(predicate)
+  }, [newsList, languageMode])
 
   const handleDateSortToggle = () => {
     const nextOrder = dateSortOrder === 'asc' ? 'desc' : 'asc'
@@ -292,28 +313,26 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
         <div className="flex items-center space-x-3">
           <span className="text-sm font-medium text-gray-700">Language</span>
           <div className="inline-flex rounded-md border border-gray-200 bg-white shadow-sm">
-            <button
-              onClick={() => handleLanguageChange('EN')}
-              className={`px-3 py-1 text-sm transition-colors duration-200 first:rounded-l-md last:rounded-r-md ${
-                languageMode === 'EN'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={isActionDisabled}
-            >
-              English
-            </button>
-            <button
-              onClick={() => handleLanguageChange('KO')}
-              className={`px-3 py-1 text-sm transition-colors duration-200 first:rounded-l-md last:rounded-r-md ${
-                languageMode === 'KO'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={isActionDisabled}
-            >
-              Korean
-            </button>
+            {[
+              { label: 'All', value: 'ALL' as const },
+              { label: 'English', value: 'EN' as const },
+              { label: 'Korean', value: 'KO' as const }
+            ].map((option, index) => (
+              <button
+                key={option.value}
+                onClick={() => handleLanguageChange(option.value)}
+                className={`px-3 py-1 text-sm transition-colors duration-200 ${
+                  index === 0 ? 'rounded-l-md' : index === 2 ? 'rounded-r-md' : ''
+                } ${
+                  languageMode === option.value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isActionDisabled}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -346,14 +365,14 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {newsList.length === 0 ? (
+              {filteredNewsList.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                     No data available
                   </td>
                 </tr>
               ) : (
-                newsList.map((news) => {
+                filteredNewsList.map((news) => {
                   const displayFields = getDisplayFields(news)
                   const preview = getContentPreview(displayFields.content)
                   return (
