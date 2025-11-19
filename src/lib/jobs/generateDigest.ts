@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { curateTopNews } from '@/lib/ai/newsCurator';
 import type { SourceNewsItem } from '@/lib/ai/newsCurator';
 import { supabase } from '@/lib/supabase';
@@ -5,6 +6,8 @@ import { supabase } from '@/lib/supabase';
 const NEWS_FETCH_LIMIT = 10;
 const DIGEST_TITLE_PREFIX = 'BiteChina Daily Digest';
 const DIGEST_LOCALES = ['EN', 'KO'] as const;
+const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
+const OPENAI_BASE_URL = (process.env.OPENAI_API_BASE ?? process.env.OPENAI_BASE_URL)?.replace(/\/$/, '');
 
 type DigestLocale = (typeof DIGEST_LOCALES)[number];
 
@@ -33,6 +36,22 @@ type TemplateRow = {
 };
 
 const normalize = (value: string | null | undefined) => value?.replace(/\s+/g, ' ').trim() ?? '';
+const requireOpenAIBaseUrl = () => {
+  if (!OPENAI_BASE_URL) {
+    throw new Error('OPENAI_API_BASE 未配置，无法调用翻译服务');
+  }
+  return OPENAI_BASE_URL;
+};
+
+const digestTranslationSchema = z.object({
+  items: z.array(
+    z.object({
+      id: z.number().int().positive(),
+      title: z.string().min(1),
+      summary: z.string().min(1),
+    })
+  ),
+});
 
 const localeHelpers: Record<
   DigestLocale,
@@ -70,26 +89,30 @@ type LocalizedNews = {
 const buildLocalizedEntries = (
   locale: DigestLocale,
   items: Array<{ id: number; link: string }>,
-  newsMap: Map<number, LocalizedNews>
+  newsMap: Map<number, LocalizedNews>,
+  curatedMap: Map<number, { title: string; summary: string }>
 ) => {
   const helper = localeHelpers[locale];
 
   return items
     .map(({ id, link }) => {
       const record = newsMap.get(id);
+      const curated = curatedMap.get(id);
       if (!record) {
         return null;
       }
 
       const titleRaw =
-        locale === 'EN'
+        curated?.title ??
+        (locale === 'EN'
           ? normalize(record.titleEn) || normalize(record.title)
-          : normalize(record.titleKo) || normalize(record.title);
+          : normalize(record.titleKo) || normalize(record.title));
 
       const summaryRaw =
-        locale === 'EN'
+        curated?.summary ??
+        (locale === 'EN'
           ? normalize(record.summaryEn) || normalize(record.summaryKo) || normalize(record.aiReason)
-          : normalize(record.summaryKo) || normalize(record.summaryEn) || normalize(record.aiReason);
+          : normalize(record.summaryKo) || normalize(record.summaryEn) || normalize(record.aiReason));
 
       return {
         id: record.id,
@@ -101,8 +124,13 @@ const buildLocalizedEntries = (
     .filter((entry): entry is { id: number; title: string; summary: string; link: string | null } => entry !== null);
 };
 
-const formatDigest = (locale: DigestLocale, items: Array<{ id: number; link: string }>, newsMap: Map<number, LocalizedNews>) => {
-  const entries = buildLocalizedEntries(locale, items, newsMap);
+const formatDigest = (
+  locale: DigestLocale,
+  items: Array<{ id: number; link: string }>,
+  newsMap: Map<number, LocalizedNews>,
+  curatedMap: Map<number, { title: string; summary: string }>
+) => {
+  const entries = buildLocalizedEntries(locale, items, newsMap, curatedMap);
 
   if (entries.length === 0) {
     return null;
@@ -143,6 +171,97 @@ export type DigestJobResult =
 
 type SuccessfulDigestJobResult = Extract<DigestJobResult, { created: true }>;
 
+type DigestJobOptions = {
+  newsIds?: number[];
+};
+
+const translateDigestItems = async (
+  items: Array<{ id: number; title: string; summary: string }>,
+  locale: DigestLocale
+) => {
+  if (locale !== 'KO') {
+    return null;
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  if (!OPENAI_BASE_URL) {
+    console.warn('OPENAI_API_BASE 未设置，跳过韩文翻译');
+    return null;
+  }
+
+  const baseUrl = requireOpenAIBaseUrl();
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      temperature: 0,
+      response_format: { type: 'json_object' as const },
+      messages: [
+        {
+          role: 'system',
+          content: 'Translate briefing headlines and summaries into natural Korean suitable for professional newsletters.',
+        },
+        {
+          role: 'user',
+          content:
+            'Return JSON {"items":[{"id":number,"title":string,"summary":string}]} with fluent Korean translations. Items:\n' +
+            JSON.stringify(items, null, 2),
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    console.warn('Digest translation request failed', response.status, await response.text());
+    return null;
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+
+  const content = data.choices?.[0]?.message?.content ?? null;
+  if (!content) {
+    return null;
+  }
+
+  const parsed = (() => {
+    try {
+      return JSON.parse(content);
+    } catch (error) {
+      console.warn('Failed to parse translation response', error);
+      return null;
+    }
+  })();
+
+  const validated = parsed ? digestTranslationSchema.safeParse(parsed) : null;
+  if (!validated || !validated.success) {
+    if (validated && !validated.success) {
+      console.warn('Translation schema mismatch', validated.error.format());
+    }
+    return null;
+  }
+
+  const translatedMap = new Map<number, { title: string; summary: string }>();
+  for (const entry of validated.data.items) {
+    translatedMap.set(entry.id, {
+      title: normalize(entry.title),
+      summary: normalize(entry.summary),
+    });
+  }
+
+  return translatedMap;
+};
+
 const formatDateForTitle = (value: Date) => {
   return value.toLocaleDateString('en-US', {
     year: 'numeric',
@@ -151,26 +270,55 @@ const formatDateForTitle = (value: Date) => {
   });
 };
 
-export const runDigestGenerationJob = async (): Promise<DigestJobResult> => {
-  const { data: rows, error } = await supabase
-    .from('news')
-    .select('id, slug, title, link, "title-en", "title-ko", "translation-en", "translation-ko", ai_reason, category')
-    .eq('digest_used', false)
-    .or('status.eq.PUBLISH,status.eq.publish')
-    .order('iso_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(NEWS_FETCH_LIMIT);
+export const runDigestGenerationJob = async (options?: DigestJobOptions): Promise<DigestJobResult> => {
+  const selectionIds = options?.newsIds?.filter((id) => Number.isFinite(id)) ?? [];
+  let newsRows: NewsRow[] = [];
 
-  if (error) {
-    throw error;
+  if (selectionIds.length > 0) {
+    const uniqueIds = Array.from(new Set(selectionIds.map((id) => Number(id)))).filter((id) => id > 0);
+    if (uniqueIds.length === 0) {
+      return {
+        created: false,
+        reason: 'no-selection',
+        digests: [],
+        usedNewsIds: [],
+      };
+    }
+
+    const { data: selectedRows, error } = await supabase
+      .from('news')
+      .select('id, slug, title, link, "title-en", "title-ko", "translation-en", "translation-ko", ai_reason, category')
+      .in('id', uniqueIds);
+
+    if (error) {
+      throw error;
+    }
+
+    const mapped = new Map((selectedRows as NewsRow[] | null)?.map((row) => [Number(row.id), row]) ?? []);
+    newsRows = uniqueIds
+      .map((id) => mapped.get(id))
+      .filter((row): row is NewsRow => Boolean(row));
+  } else {
+    const { data: rows, error } = await supabase
+      .from('news')
+      .select('id, slug, title, link, "title-en", "title-ko", "translation-en", "translation-ko", ai_reason, category')
+      .eq('digest_used', false)
+      .or('status.eq.PUBLISH,status.eq.publish')
+      .order('iso_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(NEWS_FETCH_LIMIT);
+
+    if (error) {
+      throw error;
+    }
+
+    newsRows = (rows as NewsRow[] | null) ?? [];
   }
-
-  const newsRows = (rows as NewsRow[] | null) ?? [];
 
   if (newsRows.length === 0) {
     return {
       created: false,
-      reason: 'no-news',
+      reason: selectionIds.length > 0 ? 'no-selection' : 'no-news',
       digests: [],
       usedNewsIds: [],
     };
@@ -280,12 +428,25 @@ export const runDigestGenerationJob = async (): Promise<DigestJobResult> => {
   const usedNewsIds = curated.map((item) => item.id);
 
   const digests: SuccessfulDigestJobResult['digests'] = [];
+  const curatedMap = new Map(curated.map((item) => [item.id, { title: item.title, summary: item.summary }]));
+  const koreanCuratedMap = await translateDigestItems(curated, 'KO');
 
   for (const locale of DIGEST_LOCALES) {
+    const localizedCuratedMap =
+      locale === 'KO' && koreanCuratedMap
+        ? new Map(
+            curated.map((item) => [
+              item.id,
+              koreanCuratedMap.get(item.id) ?? { title: item.title, summary: item.summary },
+            ])
+          )
+        : curatedMap;
+
     const digestContent = formatDigest(
       locale,
       curated.map((item) => ({ id: item.id, link: item.link })),
-      newsMap
+      newsMap,
+      localizedCuratedMap
     );
 
     if (!digestContent) {

@@ -1,3 +1,5 @@
+import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { handleRouteError } from '@/lib/api/error';
 import { successResponse } from '@/lib/api/response';
 import { runDigestGenerationJob } from '@/lib/jobs/generateDigest';
@@ -5,9 +7,25 @@ import { runDigestGenerationJob } from '@/lib/jobs/generateDigest';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const POST = async () => {
+const requestSchema = z.object({
+  newsIds: z.array(z.number().int().positive()).min(1).optional(),
+});
+
+export const POST = async (request: NextRequest) => {
   try {
-    const result = await runDigestGenerationJob();
+    let payloadData: unknown = {};
+    try {
+      payloadData = await request.json();
+    } catch (_) {
+      payloadData = {};
+    }
+
+    const payload = requestSchema.safeParse(payloadData);
+    if (!payload.success) {
+      return handleRouteError(payload.error);
+    }
+
+    const result = await runDigestGenerationJob(payload.data);
 
     if (!result.created) {
       const message =
