@@ -1,4 +1,4 @@
-const DEFAULT_SITE_NEWS_BASE_URL = 'https://www.bitechina.com/article';
+const DEFAULT_SITE_NEWS_BASE_URL = 'https://www.bitechina.com';
 
 const stripTrailingSlash = (value: string) => value.replace(/\/$/, '');
 
@@ -11,17 +11,25 @@ const resolveSiteBaseUrl = () => {
   return stripTrailingSlash(process.env.NEXT_PUBLIC_SITE_NEWS_BASE_URL ?? DEFAULT_SITE_NEWS_BASE_URL);
 };
 
-const requireSlug = (slug: string | null | undefined, id: number) => {
-  const trimmed = typeof slug === 'string' ? slug.trim() : '';
+const buildSlugFromTitle = (title: string | null | undefined, id: number) => {
+  const trimmed = typeof title === 'string' ? title.trim() : '';
   if (!trimmed) {
-    throw new Error(`新闻 ${id} 缺少 slug，无法生成站内链接`);
+    return `story-${id}`;
   }
-  return trimmed;
+  const normalized = trimmed.replace(/\s+/g, '-');
+  return encodeURIComponent(normalized);
 };
 
-export const buildNewsPermalink = (id: number, slug: string | null | undefined) => {
+const normalizeLocale = (locale?: string | null) => {
+  const value = (locale ?? '').toLowerCase();
+  return value === 'ko' ? 'ko' : 'en';
+};
+
+export const buildNewsPermalink = (options: { id: number; title?: string | null; locale?: string | null }) => {
   const base = resolveSiteBaseUrl();
-  return `${base}/${requireSlug(slug, id)}`;
+  const localeSegment = normalizeLocale(options.locale);
+  const slug = buildSlugFromTitle(options.title, options.id);
+  return `${base}/${localeSegment}/article/${options.id}/${slug}`;
 };
 
 export const SITE_NEWS_BASE_URL = resolveSiteBaseUrl();

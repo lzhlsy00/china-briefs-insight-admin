@@ -95,7 +95,7 @@ const fallbackSelection = (items: PreparedNews[]): CuratedNewsItem[] => {
     id: item.id,
     title: item.title,
     summary: item.baseSummary,
-    link: buildNewsPermalink(item.id, item.slug),
+    link: buildNewsPermalink({ id: item.id, title: item.title, locale: 'en' }),
   }));
 };
 
@@ -119,7 +119,7 @@ const buildPrompt = (items: PreparedNews[]) => {
     id: item.id,
     title: item.title,
     category: item.category ?? null,
-    link: buildNewsPermalink(item.id, item.slug),
+    link: buildNewsPermalink({ id: item.id, title: item.title, locale: 'en' }),
     summary: item.baseSummary,
   }));
 
@@ -316,7 +316,7 @@ export const curateTopNews = async (news: SourceNewsItem[]): Promise<CuratedNews
           id: source.id,
           title: rawTitle,
           summary: rawSummary,
-          link: buildNewsPermalink(source.id, source.slug),
+          link: buildNewsPermalink({ id: source.id, title: source.title, locale: 'en' }),
         });
 
         if (collected.length >= limit) {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { curateTopNews } from '@/lib/ai/newsCurator';
 import type { SourceNewsItem } from '@/lib/ai/newsCurator';
+import { buildNewsPermalink } from '@/lib/newsLinks';
 import { supabase } from '@/lib/supabase';
 
 const NEWS_FETCH_LIMIT = 10;
@@ -88,14 +89,14 @@ type LocalizedNews = {
 
 const buildLocalizedEntries = (
   locale: DigestLocale,
-  items: Array<{ id: number; link: string }>,
+  items: Array<{ id: number }>,
   newsMap: Map<number, LocalizedNews>,
   curatedMap: Map<number, { title: string; summary: string }>
 ) => {
   const helper = localeHelpers[locale];
 
   return items
-    .map(({ id, link }) => {
+    .map(({ id }) => {
       const record = newsMap.get(id);
       const curated = curatedMap.get(id);
       if (!record) {
@@ -114,11 +115,22 @@ const buildLocalizedEntries = (
           ? normalize(record.summaryEn) || normalize(record.summaryKo) || normalize(record.aiReason)
           : normalize(record.summaryKo) || normalize(record.summaryEn) || normalize(record.aiReason));
 
+      const localeCode = locale === 'KO' ? 'ko' : 'en';
+      const linkTitle = locale === 'EN'
+        ? normalize(record.titleEn) || normalize(record.title)
+        : normalize(record.titleKo) || normalize(record.title);
+
+      const link = buildNewsPermalink({
+        id: record.id,
+        title: linkTitle || record.title,
+        locale: localeCode,
+      });
+
       return {
         id: record.id,
         title: titleRaw || helper.fallbackTitle(record.id),
         summary: summaryRaw || helper.fallbackSummary,
-        link: link || record.link,
+        link,
       };
     })
     .filter((entry): entry is { id: number; title: string; summary: string; link: string | null } => entry !== null);
@@ -126,7 +138,7 @@ const buildLocalizedEntries = (
 
 const formatDigest = (
   locale: DigestLocale,
-  items: Array<{ id: number; link: string }>,
+  items: Array<{ id: number }>,
   newsMap: Map<number, LocalizedNews>,
   curatedMap: Map<number, { title: string; summary: string }>
 ) => {
@@ -342,16 +354,12 @@ export const runDigestGenerationJob = async (options?: DigestJobOptions): Promis
   const newsForCurator: SourceNewsItem[] = [];
 
   for (const item of localizedNews) {
-    const slugValue = typeof item.slug === 'string' ? item.slug.trim() : '';
-    if (!slugValue) {
-      continue;
-    }
-
+    const englishTitle = item.titleEn ?? item.title ?? `Story ${item.id}`;
     newsForCurator.push({
       id: item.id,
-      slug: slugValue,
-      title: item.titleEn ?? item.title ?? `Story ${item.id}`,
-      link: item.link ?? '',
+      slug: null,
+      title: englishTitle,
+      link: buildNewsPermalink({ id: item.id, title: englishTitle, locale: 'en' }),
       content: item.summaryEn ?? item.summaryKo ?? item.aiReason ?? null,
       aiReason: item.aiReason ?? null,
       category: item.category ?? null,
@@ -444,7 +452,7 @@ export const runDigestGenerationJob = async (options?: DigestJobOptions): Promis
 
     const digestContent = formatDigest(
       locale,
-      curated.map((item) => ({ id: item.id, link: item.link })),
+      curated.map((item) => ({ id: item.id })),
       newsMap,
       localizedCuratedMap
     );

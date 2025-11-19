@@ -138,7 +138,11 @@ export default function PushContentCreatePage() {
     const mapped: SelectedNews[] = selected.map((item) => {
       const title = normalize(item.title) || normalize(item.titleEn) || normalize(item.titleKo) || '未命名新闻'
       const summary = normalize(item.content) || normalize(item.translationEn) || normalize(item.translationKo) || '暂无摘要'
-      const permalink = item.slug ? buildNewsPermalink(item.id, item.slug) : null
+      const permalink = buildNewsPermalink({
+        id: item.id,
+        title: item.title || item.titleEn || item.titleKo || `新闻-${item.id}`,
+        locale: 'en',
+      })
       return { id: item.id, title, summary, link: permalink }
     })
 
