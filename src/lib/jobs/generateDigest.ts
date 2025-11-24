@@ -133,7 +133,7 @@ const buildLocalizedEntries = (
         link,
       };
     })
-    .filter((entry): entry is { id: number; title: string; summary: string; link: string | null } => entry !== null);
+    .filter((entry): entry is { id: number; title: string; summary: string; link: string } => entry !== null);
 };
 
 const formatDigest = (

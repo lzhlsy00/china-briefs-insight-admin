@@ -16,7 +16,7 @@ export const POST = async (request: NextRequest) => {
     let payloadData: unknown = {};
     try {
       payloadData = await request.json();
-    } catch (_) {
+    } catch {
       payloadData = {};
     }
 
