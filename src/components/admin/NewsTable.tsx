@@ -242,6 +242,12 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
   const dateSortLabel = dateSortOrder === 'asc' ? 'Date (Asc)' : 'Date (Desc)'
   const statusSortLabel = statusSortOrder === 'asc' ? 'Status (Draft->Publish)' : 'Status (Publish->Draft)'
   const isActionDisabled = loading || deletingId !== null || statusUpdatingId !== null
+  const getTimeArrowClass = (direction: 'up' | 'down') => {
+    const isUp = direction === 'up'
+    const isActive =
+      activeSort === 'isoDate' && ((isUp && dateSortOrder === 'asc') || (!isUp && dateSortOrder === 'desc'))
+    return `text-[10px] leading-none ${isActive ? 'text-gray-900' : 'text-gray-300'}`
+  }
 
   if (error) {
     return (
@@ -357,7 +363,20 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Time
+                  <button
+                    type="button"
+                    onClick={handleDateSortToggle}
+                    disabled={isActionDisabled}
+                    className={`flex items-center gap-1 uppercase tracking-wider hover:text-gray-700 ${
+                      isActionDisabled ? 'cursor-not-allowed opacity-60' : ''
+                    }`}
+                  >
+                    <span>Time</span>
+                    <span className="flex flex-col leading-none">
+                      <span className={getTimeArrowClass('up')}>▲</span>
+                      <span className={getTimeArrowClass('down')}>▼</span>
+                    </span>
+                  </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
