@@ -12,10 +12,9 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null)
   const [aiFilter, setAiFilter] = useState<'ALL' | 'TRUE' | 'FALSE'>('ALL')
-  const [activeSort, setActiveSort] = useState<'isoDate' | 'status'>('status')
   const [languageMode, setLanguageMode] = useState<'ALL' | 'EN' | 'KO'>('ALL')
   const [dateSortOrder, setDateSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [statusSortOrder, setStatusSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PUBLISH' | 'DRAFT'>('ALL')
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   
   const { 
@@ -27,7 +26,7 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
     refreshNews, 
     updateParams 
   } = useNewsList({ 
-    sortBy: 'status', 
+    sortBy: 'isoDate', 
     sortOrder: 'desc',
     limit: 10 
   })
@@ -225,29 +224,45 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
     return newsList.filter(predicate)
   }, [newsList, languageMode])
 
+  const applyDateSort = (order: 'asc' | 'desc') => {
+    setDateSortOrder(order)
+    updateParams({
+      page: 1,
+      sortBy: 'isoDate',
+      sortOrder: order,
+      secondarySortBy: undefined,
+      secondarySortOrder: undefined,
+    })
+  }
+
+  const handleDateSortDirection = (direction: 'asc' | 'desc') => {
+    applyDateSort(direction)
+  }
+
   const handleDateSortToggle = () => {
     const nextOrder = dateSortOrder === 'asc' ? 'desc' : 'asc'
-    setDateSortOrder(nextOrder)
-    setActiveSort('isoDate')
-    updateParams({ page: 1, sortBy: 'isoDate', sortOrder: nextOrder })
+    applyDateSort(nextOrder)
   }
 
-  const handleStatusSortToggle = () => {
-    const nextOrder = statusSortOrder === 'asc' ? 'desc' : 'asc'
-    setStatusSortOrder(nextOrder)
-    setActiveSort('status')
-    updateParams({ page: 1, sortBy: 'status', sortOrder: nextOrder })
+  const handleStatusFilterChange = (value: 'ALL' | 'PUBLISH' | 'DRAFT') => {
+    setStatusFilter(value)
+    updateParams({
+      page: 1,
+      status: value === 'ALL' ? undefined : value,
+    })
   }
 
-  const dateSortLabel = dateSortOrder === 'asc' ? 'Date (Asc)' : 'Date (Desc)'
-  const statusSortLabel = statusSortOrder === 'asc' ? 'Status (Draft->Publish)' : 'Status (Publish->Draft)'
   const isActionDisabled = loading || deletingId !== null || statusUpdatingId !== null
   const getTimeArrowClass = (direction: 'up' | 'down') => {
     const isUp = direction === 'up'
-    const isActive =
-      activeSort === 'isoDate' && ((isUp && dateSortOrder === 'asc') || (!isUp && dateSortOrder === 'desc'))
+    const isActive = (isUp && dateSortOrder === 'asc') || (!isUp && dateSortOrder === 'desc')
     return `text-[10px] leading-none ${isActive ? 'text-gray-900' : 'text-gray-300'}`
   }
+
+  const getDateSortButtonClass = (direction: 'asc' | 'desc') =>
+    `px-3 py-1 text-sm transition-colors duration-200 ${
+      dateSortOrder === direction ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
+    } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`
 
   if (error) {
     return (
@@ -291,29 +306,46 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
         </div>
         <div className="flex items-center space-x-3">
           <span className="text-sm font-medium text-gray-700">Sorting</span>
+          <div className="inline-flex rounded-md border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <button
+              onClick={() => handleDateSortDirection('asc')}
+              className={getDateSortButtonClass('asc')}
+              disabled={isActionDisabled}
+            >
+              Date ↑
+            </button>
+            <button
+              onClick={() => handleDateSortDirection('desc')}
+              className={getDateSortButtonClass('desc')}
+              disabled={isActionDisabled}
+            >
+              Date ↓
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center space-x-3">
+          <span className="text-sm font-medium text-gray-700">Status</span>
           <div className="inline-flex rounded-md border border-gray-200 bg-white shadow-sm">
-            <button
-              onClick={handleDateSortToggle}
-              className={`px-3 py-1 text-sm transition-colors duration-200 first:rounded-l-md last:rounded-r-md ${
-                activeSort === 'isoDate'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={isActionDisabled}
-            >
-              {dateSortLabel}
-            </button>
-            <button
-              onClick={handleStatusSortToggle}
-              className={`px-3 py-1 text-sm transition-colors duration-200 first:rounded-l-md last:rounded-r-md ${
-                activeSort === 'status'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={isActionDisabled}
-            >
-              {statusSortLabel}
-            </button>
+            {[
+              { label: 'All', value: 'ALL' as const },
+              { label: 'Published', value: 'PUBLISH' as const },
+              { label: 'Draft', value: 'DRAFT' as const },
+            ].map((option, index) => (
+              <button
+                key={option.value}
+                onClick={() => handleStatusFilterChange(option.value)}
+                className={`px-3 py-1 text-sm transition-colors duration-200 ${
+                  index === 0 ? 'rounded-l-md' : index === 2 ? 'rounded-r-md' : ''
+                } ${
+                  statusFilter === option.value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                } ${isActionDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isActionDisabled}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         </div>
         <div className="flex items-center space-x-3">

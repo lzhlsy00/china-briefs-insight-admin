@@ -15,7 +15,19 @@ const querySchema = z.object({
   language: z.enum(['EN', 'KO']).optional(),
   sortBy: z.enum(['id', 'title', 'isoDate', 'category', 'status', 'aiWorth']).default('id'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  secondarySortBy: z.enum(['id', 'title', 'isoDate', 'category', 'status', 'aiWorth']).optional(),
+  secondarySortOrder: z.enum(['asc', 'desc']).optional(),
 });
+
+const mapSortColumn = (key: 'id' | 'title' | 'isoDate' | 'category' | 'status' | 'aiWorth') => {
+  if (key === 'isoDate') {
+    return 'iso_date';
+  }
+  if (key === 'aiWorth') {
+    return 'ai_worth';
+  }
+  return key;
+};
 
 export const GET = async (request: NextRequest) => {
   try {
@@ -60,10 +72,14 @@ export const GET = async (request: NextRequest) => {
     }
 
     // 排序
-    const sortColumn = query.sortBy === 'isoDate' ? 'iso_date' : 
-                       query.sortBy === 'aiWorth' ? 'ai_worth' : 
-                       query.sortBy;
+    const sortColumn = mapSortColumn(query.sortBy);
     supabaseQuery = supabaseQuery.order(sortColumn, { ascending: query.sortOrder === 'asc' });
+
+    if (query.secondarySortBy) {
+      const secondaryColumn = mapSortColumn(query.secondarySortBy);
+      const secondaryAscending = (query.secondarySortOrder ?? query.sortOrder) === 'asc';
+      supabaseQuery = supabaseQuery.order(secondaryColumn, { ascending: secondaryAscending });
+    }
 
     // 分页
     supabaseQuery = supabaseQuery.range(from, to);
