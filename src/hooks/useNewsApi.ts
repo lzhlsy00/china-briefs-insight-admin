@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { newsApi, handleApiError } from '../services/newsApi';
-import { NewsItem, NewsListParams, NewsUpdateData, PaginationInfo } from '../types/api';
+import { NewsItem, NewsListParams, NewsUpdateData, PaginationInfo, NewsCreatePayload } from '../types/api';
 
 export const useNewsApi = () => {
   const [loading, setLoading] = useState(false);
@@ -58,6 +58,24 @@ export const useNewsApi = () => {
     }
   }, []);
 
+  const createNews = useCallback(async (data: NewsCreatePayload) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await newsApi.createNews(data);
+      if (result.success && result.data) {
+        return result.data;
+      }
+      throw new Error(result.message || '创建失败');
+    } catch (err) {
+      const errorMessage = handleApiError(err);
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const deleteNews = useCallback(async (id: number) => {
     setLoading(true);
     setError(null);
@@ -84,6 +102,7 @@ export const useNewsApi = () => {
     fetchNewsList,
     fetchNewsById,
     updateNews,
+    createNews,
     deleteNews,
     clearError
   };

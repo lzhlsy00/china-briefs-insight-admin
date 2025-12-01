@@ -1,7 +1,7 @@
 'use client'
 
 import { createPortal } from 'react-dom'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import AdminSidebar from '@/components/admin/AdminSidebar'
@@ -56,6 +56,9 @@ export default function TemplatePage() {
   const [activeMenuId, setActiveMenuId] = useState<number | null>(null)
   const [menuPosition, setMenuPosition] = useState<{ id: number; top: number; left: number } | null>(null)
   const [activatingId, setActivatingId] = useState<number | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageInput, setPageInput] = useState('1')
+  const PAGE_SIZE = 10
 
   useEffect(() => {
     if (isLoading || !isAuthenticated) {
@@ -95,6 +98,7 @@ export default function TemplatePage() {
 
         const templates = (body.data?.templates ?? []).map((item) => normalizeTemplate(item as unknown as Record<string, unknown>))
         setData(templates)
+        setCurrentPage(1)
       } catch (fetchError) {
         if (cancelled) {
           return
@@ -143,6 +147,54 @@ export default function TemplatePage() {
       window.removeEventListener('resize', handleDismiss)
     }
   }, [activeMenuId, closeMenu])
+
+  const totalPages = Math.max(1, Math.ceil(data.length / PAGE_SIZE))
+
+  useEffect(() => {
+    setCurrentPage((prev) => {
+      const clamped = Math.min(Math.max(prev, 1), totalPages)
+      return clamped === prev ? prev : clamped
+    })
+  }, [totalPages])
+
+  useEffect(() => {
+    setPageInput(String(currentPage))
+  }, [currentPage])
+
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE
+    return data.slice(start, start + PAGE_SIZE)
+  }, [data, currentPage, PAGE_SIZE])
+
+  const handlePageChange = (page: number) => {
+    const clamped = Math.min(Math.max(page, 1), totalPages)
+    setCurrentPage(clamped)
+  }
+
+  const handlePageInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value.replace(/[^0-9]/g, '')
+    setPageInput(value)
+  }
+
+  const handlePageJump = () => {
+    const parsed = Number(pageInput)
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setPageInput(String(currentPage))
+      return
+    }
+    handlePageChange(parsed)
+  }
+
+  const handlePageInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      handlePageJump()
+    }
+  }
+
+  const pageStart = data.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+  const pageEnd = data.length === 0 ? 0 : Math.min(currentPage * PAGE_SIZE, data.length)
+  const isPageJumpDisabled = loading || data.length === 0
 
   const handleMenuToggle = (event: ReactMouseEvent<HTMLButtonElement>, id: number) => {
     event.stopPropagation()
@@ -315,7 +367,7 @@ export default function TemplatePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {data.map((item) => (
+                {paginatedData.map((item) => (
                   <tr
                     key={item.id}
                     className={`relative hover:bg-gray-50 ${item.isActive ? 'bg-green-50/60' : ''} ${
@@ -368,6 +420,63 @@ export default function TemplatePage() {
               </tbody>
             </table>
           )}
+        {data.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-gray-200 bg-gray-50 px-6 py-4 text-sm text-gray-600">
+            <div>
+              Showing <span className="font-medium">{pageStart}</span> to{' '}
+              <span className="font-medium">{pageEnd}</span> of{' '}
+              <span className="font-medium">{data.length}</span> templates
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage <= 1 || loading}
+                  className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1 text-sm bg-blue-600 text-white border border-blue-600 rounded-md">
+                  {currentPage}
+                </span>
+                <span className="text-sm text-gray-600">/ {totalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages || loading}
+                  className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+              <div className="flex items-center space-x-2">
+                <label htmlFor="template-page-jump" className="text-sm text-gray-600">
+                  Jump to
+                </label>
+                <input
+                  id="template-page-jump"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={pageInput}
+                  onChange={handlePageInputChange}
+                  onKeyDown={handlePageInputKeyDown}
+                  disabled={isPageJumpDisabled}
+                  className="w-16 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <button
+                  type="button"
+                  onClick={handlePageJump}
+                  disabled={isPageJumpDisabled}
+                  className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Go
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         </div>
       </main>
       </div>

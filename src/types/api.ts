@@ -22,11 +22,14 @@ export interface NewsItem {
   aiReason: string | null;
   category: string | null;
   categoryEn?: string | null;
+  categoryKo?: string | null;
   status: 'DRAFT' | 'PUBLISH';
   translationKo: string | null;
   translationEn: string | null;
   titleKo: string | null;
   titleEn: string | null;
+  aiReasonEn?: string | null;
+  aiReasonKo?: string | null;
 }
 
 // 分页信息
@@ -110,4 +113,19 @@ export interface NewsUploadData {
   translationEn?: string | null;
   titleKo?: string | null;
   titleEn?: string | null;
+}
+
+export interface NewsCreatePayload {
+  isoDate: string;
+  status: 'DRAFT' | 'PUBLISH';
+  aiWorth: boolean;
+  primaryLanguage: 'EN' | 'KO';
+  titleEn?: string;
+  titleKo?: string;
+  contentEn?: string;
+  contentKo?: string;
+  categoryEn?: string;
+  categoryKo?: string;
+  aiReasonEn?: string;
+  aiReasonKo?: string;
 }

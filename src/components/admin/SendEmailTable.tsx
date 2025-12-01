@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { useSendEmailLogs } from '@/hooks/useSendEmailLogs'
 
 const formatDateTime = (value?: string | null) => {
@@ -43,6 +43,13 @@ const DeliveryStatus = ({ delivered }: { delivered: DeliveryState }) => {
 export const SendEmailTable = () => {
   const { records, loading, error, pagination, setPage, reload } = useSendEmailLogs()
   const [modalInfo, setModalInfo] = useState<{ title: string; emails: string[] } | null>(null)
+  const [pageInput, setPageInput] = useState('1')
+
+  useEffect(() => {
+    if (pagination.page) {
+      setPageInput(String(pagination.page))
+    }
+  }, [pagination.page])
 
   const groupedRecords = useMemo(() => {
     const map = new Map<string, {
@@ -164,6 +171,28 @@ export const SendEmailTable = () => {
     setPage(target)
   }
 
+  const handlePageInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value.replace(/[^0-9]/g, '')
+    setPageInput(value)
+  }
+
+  const handlePageJump = () => {
+    const parsed = Number(pageInput)
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setPageInput(String(pagination.page))
+      return
+    }
+    const clamped = Math.min(Math.max(parsed, 1), Math.max(1, pagination.totalPages))
+    setPage(clamped)
+  }
+
+  const handlePageInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      handlePageJump()
+    }
+  }
+
   return (
     <div>
       <div className="overflow-x-auto">
@@ -182,27 +211,53 @@ export const SendEmailTable = () => {
         </table>
       </div>
 
-      <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between text-sm text-gray-600">
+      <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex flex-wrap items-center justify-between gap-4 text-sm text-gray-600">
         <div>
           Page {pagination.page} of {Math.max(pagination.totalPages, 1)} · {pagination.totalCount} records
         </div>
-        <div className="space-x-2">
-          <button
-            type="button"
-            onClick={() => goToPage(pagination.page - 1)}
-            disabled={pagination.page <= 1}
-            className="px-3 py-1 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            onClick={() => goToPage(pagination.page + 1)}
-            disabled={pagination.page >= pagination.totalPages}
-            className="px-3 py-1 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Next
-          </button>
+        <div className="flex items-center gap-3">
+          <div className="space-x-2">
+            <button
+              type="button"
+              onClick={() => goToPage(pagination.page - 1)}
+              disabled={pagination.page <= 1 || loading}
+              className="px-3 py-1 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => goToPage(pagination.page + 1)}
+              disabled={pagination.page >= pagination.totalPages || loading}
+              className="px-3 py-1 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+          <div className="flex items-center space-x-2">
+            <label htmlFor="send-email-jump" className="text-sm text-gray-600">
+              Jump to
+            </label>
+            <input
+              id="send-email-jump"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={pageInput}
+              onChange={handlePageInputChange}
+              onKeyDown={handlePageInputKeyDown}
+              disabled={loading}
+              className="w-16 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            <button
+              type="button"
+              onClick={handlePageJump}
+              disabled={loading}
+              className="px-3 py-1 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Go
+            </button>
+          </div>
         </div>
       </div>
 

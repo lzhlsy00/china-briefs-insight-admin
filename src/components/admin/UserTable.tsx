@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 
 interface UserProfile {
@@ -34,6 +34,7 @@ export default function UserTable() {
   const [menuPosition, setMenuPosition] = useState<{ id: string; top: number; left: number } | null>(null)
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const [isMounted, setIsMounted] = useState(false)
+  const [pageInput, setPageInput] = useState('1')
   const MENU_WIDTH = 128
   const MENU_OFFSET = 6
 
@@ -85,6 +86,12 @@ export default function UserTable() {
     fetchUsers(currentPage)
   }, [currentPage])
 
+  useEffect(() => {
+    if (pagination?.current) {
+      setPageInput(String(pagination.current))
+    }
+  }, [pagination])
+
   // Close menu when clicking outside
   useEffect(() => {
     if (openMenuId === null) return
@@ -98,7 +105,7 @@ export default function UserTable() {
       setMenuPosition(null)
     }
 
-    const handleEscape = (event: KeyboardEvent) => {
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') {
         setOpenMenuId(null)
         setMenuPosition(null)
@@ -234,6 +241,30 @@ export default function UserTable() {
   // 处理分页
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
+  }
+
+  const handlePageInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value.replace(/[^0-9]/g, '')
+    setPageInput(value)
+  }
+
+  const handlePageJump = () => {
+    if (!pagination) return
+    const parsed = Number(pageInput)
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setPageInput(String(pagination.current))
+      return
+    }
+    const totalPages = Math.max(1, pagination.totalPages)
+    const clamped = Math.min(Math.max(parsed, 1), totalPages)
+    setCurrentPage(clamped)
+  }
+
+  const handlePageInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      handlePageJump()
+    }
   }
 
   // Subscription options
@@ -392,24 +423,51 @@ export default function UserTable() {
                 <span className="font-medium">{Math.min(pagination.current * pagination.limit, pagination.totalCount)}</span> of{' '}
                 <span className="font-medium">{pagination.totalCount}</span> entries
               </div>
-              <div className="flex space-x-2">
-                <button 
-                  onClick={() => handlePageChange(pagination.current - 1)}
-                  disabled={!pagination.hasPrev || loading}
-                  className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                <span className="px-3 py-1 text-sm bg-blue-600 text-white border border-blue-600 rounded-md">
-                  {pagination.current}
-                </span>
-                <button 
-                  onClick={() => handlePageChange(pagination.current + 1)}
-                  disabled={!pagination.hasNext || loading}
-                  className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => handlePageChange(pagination.current - 1)}
+                    disabled={!pagination.hasPrev || loading}
+                    className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span className="px-3 py-1 text-sm bg-blue-600 text-white border border-blue-600 rounded-md">
+                    {pagination.current}
+                  </span>
+                  <span className="text-sm text-gray-600">/ {Math.max(1, pagination.totalPages)}</span>
+                  <button 
+                    onClick={() => handlePageChange(pagination.current + 1)}
+                    disabled={!pagination.hasNext || loading}
+                    className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm text-gray-600" htmlFor="user-page-jump">
+                    Jump to
+                  </label>
+                  <input
+                    id="user-page-jump"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={pageInput}
+                    onChange={handlePageInputChange}
+                    onKeyDown={handlePageInputKeyDown}
+                    disabled={loading}
+                    className="w-16 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <button
+                    type="button"
+                    onClick={handlePageJump}
+                    disabled={loading}
+                    className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Go
+                  </button>
+                </div>
               </div>
             </div>
           </div>

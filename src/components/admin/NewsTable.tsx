@@ -1,20 +1,25 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { NewsItem } from '@/types/api'
 import { useNewsList, useNewsApi } from '@/hooks/useNewsApi'
 
 interface NewsTableProps {
   onEditNews: (newsItem: NewsItem) => void
+  refreshSignal?: number
 }
 
-export default function NewsTable({ onEditNews }: NewsTableProps) {
+export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null)
   const [aiFilter, setAiFilter] = useState<'ALL' | 'TRUE' | 'FALSE'>('ALL')
   const [languageMode, setLanguageMode] = useState<'ALL' | 'EN' | 'KO'>('ALL')
   const [dateSortOrder, setDateSortOrder] = useState<'asc' | 'desc'>('desc')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PUBLISH' | 'DRAFT'>('ALL')
+  const [titleFilterInput, setTitleFilterInput] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [categoryOptions, setCategoryOptions] = useState<Array<{ value: string; label: string }>>([])
+  const [pageInput, setPageInput] = useState<string>('1')
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   
   const { 
@@ -170,7 +175,7 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
       closeMenu()
     }
 
-    const handleEscape = (event: KeyboardEvent) => {
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') {
         closeMenu()
       }
@@ -187,6 +192,35 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
   // Handle pagination
   const handlePageChange = (page: number) => {
     updateParams({ page })
+  }
+
+  useEffect(() => {
+    if (pagination?.current) {
+      setPageInput(String(pagination.current))
+    }
+  }, [pagination])
+
+  const handlePageInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value.replace(/[^0-9]/g, '')
+    setPageInput(value)
+  }
+
+  const handlePageJump = () => {
+    if (!pagination) return
+    const parsed = Number(pageInput)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setPageInput(String(pagination.current))
+      return
+    }
+    const clamped = Math.min(Math.max(parsed, 1), pagination.total || 1)
+    updateParams({ page: clamped })
+  }
+
+  const handlePageInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      handlePageJump()
+    }
   }
 
   // Handle AI worth filter change
@@ -224,6 +258,60 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
     return newsList.filter(predicate)
   }, [newsList, languageMode])
 
+  const normalizedTitleParam = useMemo(() => (typeof params.title === 'string' ? params.title : '').trim(), [params.title])
+
+  useEffect(() => {
+    setTitleFilterInput(typeof params.title === 'string' ? params.title : '')
+  }, [params.title])
+
+  useEffect(() => {
+    setCategoryFilter(typeof params.category === 'string' ? params.category : '')
+  }, [params.category])
+
+  const resolveCategoryLabel = useCallback((item: NewsItem) => {
+    if (languageMode === 'KO') {
+      return item.categoryKo?.trim() || item.category?.trim() || item.categoryEn?.trim() || ''
+    }
+    return item.categoryEn?.trim() || item.category?.trim() || item.categoryKo?.trim() || ''
+  }, [languageMode])
+
+  const rawCategoryValue = useCallback((item: NewsItem) => item.category?.trim() || '', [])
+
+  useEffect(() => {
+    if (!newsList) return
+    setCategoryOptions((prev) => {
+      const map = new Map<string, string>()
+      prev.forEach((option) => {
+        map.set(option.value, option.label)
+      })
+      newsList.forEach((item) => {
+        const value = rawCategoryValue(item)
+        if (!value) {
+          return
+        }
+        const label = resolveCategoryLabel(item) || value
+        map.set(value, label)
+      })
+      const entries = Array.from(map.entries())
+      return entries
+        .map(([value, label]) => ({ value, label }))
+        .sort((a, b) => a.label.localeCompare(b.label))
+    })
+  }, [newsList, resolveCategoryLabel, rawCategoryValue])
+
+  const lastRefreshSignalRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (refreshSignal == null) {
+      return
+    }
+    if (lastRefreshSignalRef.current === refreshSignal) {
+      return
+    }
+    lastRefreshSignalRef.current = refreshSignal
+    refreshNews()
+  }, [refreshSignal, refreshNews])
+
   const applyDateSort = (order: 'asc' | 'desc') => {
     setDateSortOrder(order)
     updateParams({
@@ -252,7 +340,47 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
     })
   }
 
+  const handleTitleFilterChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setTitleFilterInput(event.target.value)
+  }
+
+  const applyTitleFilter = useCallback((value: string) => {
+    const trimmed = value.trim()
+    updateParams({
+      page: 1,
+      title: trimmed.length > 0 ? trimmed : undefined,
+    })
+  }, [updateParams])
+
+  useEffect(() => {
+    const trimmed = titleFilterInput.trim()
+    if (trimmed === normalizedTitleParam) {
+      return
+    }
+    const handle = setTimeout(() => {
+      applyTitleFilter(titleFilterInput)
+    }, 400)
+    return () => clearTimeout(handle)
+  }, [titleFilterInput, normalizedTitleParam, applyTitleFilter])
+
+  const handleTitleFilterKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      applyTitleFilter(titleFilterInput)
+    }
+  }
+
+  const handleCategorySelectChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value
+    setCategoryFilter(value)
+    updateParams({
+      page: 1,
+      category: value || undefined,
+    })
+  }
+
   const isActionDisabled = loading || deletingId !== null || statusUpdatingId !== null
+  const isPageJumpDisabled = isActionDisabled || !pagination
   const getTimeArrowClass = (direction: 'up' | 'down') => {
     const isUp = direction === 'up'
     const isActive = (isUp && dateSortOrder === 'asc') || (!isUp && dateSortOrder === 'desc')
@@ -371,6 +499,59 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
                 {option.label}
               </button>
             ))}
+          </div>
+        </div>
+        <div className="w-full rounded-lg border border-gray-200 bg-white/70 px-4 py-3">
+          <div className="flex flex-wrap gap-4 items-end">
+            <div className="flex flex-1 min-w-[220px] flex-col gap-1">
+              <label htmlFor="news-title-filter" className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Title Search
+              </label>
+              <div className="relative flex">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                  </svg>
+                </span>
+                <input
+                  id="news-title-filter"
+                  type="text"
+                  value={titleFilterInput}
+                  onChange={handleTitleFilterChange}
+                  onKeyDown={handleTitleFilterKeyDown}
+                  placeholder="e.g. AI policy"
+                  className="w-full rounded-l-md border border-gray-300 bg-white pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => applyTitleFilter(titleFilterInput)}
+                  disabled={loading}
+                  className="inline-flex items-center rounded-r-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Search
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-col min-w-[200px] gap-1">
+              <label htmlFor="news-category-filter" className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Category
+              </label>
+              <select
+                id="news-category-filter"
+                value={categoryFilter}
+                onChange={handleCategorySelectChange}
+                disabled={loading || categoryOptions.length === 0}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">All</option>
+                {categoryOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -532,24 +713,53 @@ export default function NewsTable({ onEditNews }: NewsTableProps) {
                 <span className="font-medium">{Math.min(pagination.current * (params.limit || 10), pagination.totalCount)}</span> of{' '}
                 <span className="font-medium">{pagination.totalCount}</span> entries
               </div>
-              <div className="flex space-x-2">
-                <button 
-                  onClick={() => handlePageChange(pagination.current - 1)}
-                  disabled={!pagination.hasPrev || loading}
-                  className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                <span className="px-3 py-1 text-sm bg-blue-600 text-white border border-blue-600 rounded-md">
-                  {pagination.current}
-                </span>
-                <button 
-                  onClick={() => handlePageChange(pagination.current + 1)}
-                  disabled={!pagination.hasNext || loading}
-                  className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => handlePageChange(pagination.current - 1)}
+                    disabled={!pagination.hasPrev || loading}
+                    className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span className="px-3 py-1 text-sm bg-blue-600 text-white border border-blue-600 rounded-md">
+                    {pagination.current}
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    / {pagination.total || 1}
+                  </span>
+                  <button 
+                    onClick={() => handlePageChange(pagination.current + 1)}
+                    disabled={!pagination.hasNext || loading}
+                    className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm text-gray-600" htmlFor="page-jump">
+                    Jump to
+                  </label>
+                  <input
+                    id="page-jump"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={pageInput}
+                    onChange={handlePageInputChange}
+                    onKeyDown={handlePageInputKeyDown}
+                    disabled={isPageJumpDisabled}
+                    className="w-16 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <button
+                    type="button"
+                    onClick={handlePageJump}
+                    disabled={isPageJumpDisabled}
+                    className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Go
+                  </button>
+                </div>
               </div>
             </div>
           </div>

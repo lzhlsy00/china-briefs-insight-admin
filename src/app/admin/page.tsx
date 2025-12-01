@@ -4,13 +4,15 @@ import { useState } from 'react'
 import AdminSidebar from '@/components/admin/AdminSidebar'
 import NewsTable from '@/components/admin/NewsTable'
 import NewsEditPage from '@/components/admin/NewsEditPage'
+import NewsCreatePage from '@/components/admin/NewsCreatePage'
 import LoginPage from '@/components/admin/LoginPage'
 import { NewsItem } from '@/types/api'
 import { useAuth } from '@/hooks/useAuth'
 
 export default function AdminPage() {
-  const [currentView, setCurrentView] = useState<'list' | 'edit'>('list')
+  const [currentView, setCurrentView] = useState<'list' | 'edit' | 'create'>('list')
   const [editingNews, setEditingNews] = useState<NewsItem | null>(null)
+  const [refreshSignal, setRefreshSignal] = useState<number | null>(null)
   const { isAuthenticated, isLoading } = useAuth()
 
   const handleEditNews = (newsItem: NewsItem) => {
@@ -23,10 +25,20 @@ export default function AdminPage() {
     setEditingNews(null)
   }
 
+  const handleAddNews = () => {
+    setEditingNews(null)
+    setCurrentView('create')
+  }
+
   const handleSaveNews = (_updatedNews: NewsItem) => {
     void _updatedNews;
     // This function will be called in NewsEditPage to notify list refresh
     // The actual refresh logic is handled in the NewsTable component
+  }
+
+  const handleNewsCreated: (news?: NewsItem) => void = () => {
+    setRefreshSignal((prev) => (prev ?? 0) + 1)
+    setCurrentView('list')
   }
 
   // Loading state
@@ -53,22 +65,36 @@ export default function AdminPage() {
       
       {/* Right content area */}
       <main className="ml-64 p-6">
-        {currentView === 'list' ? (
+        {currentView === 'list' && (
           <div className="bg-white rounded-lg shadow-md">
-            <div className="p-6 border-b border-gray-200">
-            <h1 className="text-2xl font-bold text-gray-900">News Management</h1>
-            <p className="text-gray-600 mt-1">Manage all news content</p>
+            <div className="p-6 border-b border-gray-200 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">News Management</h1>
+                <p className="text-gray-600 mt-1">Manage all news content</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddNews}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 transition-colors"
+              >
+                Add
+              </button>
             </div>
-            <NewsTable onEditNews={handleEditNews} />
+            <NewsTable onEditNews={handleEditNews} refreshSignal={refreshSignal ?? undefined} />
           </div>
-        ) : (
-          editingNews && (
+        )}
+        {currentView === 'edit' && editingNews && (
             <NewsEditPage
               newsItem={editingNews}
               onBack={handleBackToList}
               onSave={handleSaveNews}
             />
-          )
+        )}
+        {currentView === 'create' && (
+          <NewsCreatePage
+            onBack={handleBackToList}
+            onCreated={handleNewsCreated}
+          />
         )}
       </main>
     </div>

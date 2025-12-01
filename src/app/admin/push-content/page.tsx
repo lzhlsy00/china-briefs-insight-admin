@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import AdminSidebar from '@/components/admin/AdminSidebar'
 import LoginPage from '@/components/admin/LoginPage'
@@ -65,6 +65,9 @@ export default function PushContentPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [sendingId, setSendingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageInput, setPageInput] = useState('1')
+  const PAGE_SIZE = 10
 
   useEffect(() => {
     if (isLoading || !isAuthenticated) {
@@ -112,6 +115,7 @@ export default function PushContentPage() {
         }))
 
         setRecords(list)
+        setCurrentPage(1)
       } catch (fetchError) {
         if (cancelled) {
           return
@@ -135,6 +139,54 @@ export default function PushContentPage() {
       controller.abort()
     }
   }, [isAuthenticated, isLoading])
+
+  const totalPages = Math.max(1, Math.ceil(records.length / PAGE_SIZE))
+
+  useEffect(() => {
+    setCurrentPage((prev) => {
+      const clamped = Math.min(Math.max(prev, 1), totalPages)
+      return clamped === prev ? prev : clamped
+    })
+  }, [totalPages])
+
+  useEffect(() => {
+    setPageInput(String(currentPage))
+  }, [currentPage])
+
+  const pagedRecords = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE
+    return records.slice(start, start + PAGE_SIZE)
+  }, [records, currentPage])
+
+  const handlePageChange = (page: number) => {
+    const clamped = Math.min(Math.max(page, 1), totalPages)
+    setCurrentPage(clamped)
+  }
+
+  const handlePageInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value.replace(/[^0-9]/g, '')
+    setPageInput(value)
+  }
+
+  const handlePageJump = () => {
+    const parsed = Number(pageInput)
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setPageInput(String(currentPage))
+      return
+    }
+    handlePageChange(parsed)
+  }
+
+  const handlePageInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      handlePageJump()
+    }
+  }
+
+  const pageStart = records.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+  const pageEnd = records.length === 0 ? 0 : Math.min(currentPage * PAGE_SIZE, records.length)
+  const isPageJumpDisabled = loading || records.length === 0
 
   const handleSend = async (id: number) => {
     if (sendingId === id) {
@@ -275,7 +327,7 @@ export default function PushContentPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {records.map((item) => (
+                      {pagedRecords.map((item) => (
                         <tr key={item.id} className="hover:bg-gray-50">
                           <td className={`${tdClass} font-medium text-gray-900`}>{item.title ?? '—'}</td>
                           <td className={tdClass}>{formatDate(item.date)}</td>
@@ -326,6 +378,63 @@ export default function PushContentPage() {
                     </tbody>
                   </table>
                 )}
+              </div>
+            )}
+            {records.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border border-gray-200 bg-gray-50 px-6 py-4 text-sm text-gray-600 rounded-lg">
+                <div>
+                  Showing <span className="font-medium">{pageStart}</span> to{' '}
+                  <span className="font-medium">{pageEnd}</span> of{' '}
+                  <span className="font-medium">{records.length}</span> push contents
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage <= 1 || loading}
+                      className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-3 py-1 text-sm bg-blue-600 text-white border border-blue-600 rounded-md">
+                      {currentPage}
+                    </span>
+                    <span className="text-sm text-gray-600">/ {totalPages}</span>
+                    <button
+                      type="button"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage >= totalPages || loading}
+                      className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <label htmlFor="push-content-page-jump" className="text-sm text-gray-600">
+                      Jump to
+                    </label>
+                    <input
+                      id="push-content-page-jump"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={pageInput}
+                      onChange={handlePageInputChange}
+                      onKeyDown={handlePageInputKeyDown}
+                      disabled={isPageJumpDisabled}
+                      className="w-16 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <button
+                      type="button"
+                      onClick={handlePageJump}
+                      disabled={isPageJumpDisabled}
+                      className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Go
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
