@@ -277,6 +277,7 @@ const handleChineseCategoryChange = (value: string) => {
     }
 
     if (status === 'PUBLISH') {
+      alert('已经是发布状态')
       setPublishMessage('已是发布状态')
       return
     }
@@ -294,6 +295,7 @@ const handleChineseCategoryChange = (value: string) => {
         populateFormFromNews(updated)
         setPublishMessage('已切换为发布状态')
         void waitForTranslations(updated.id)
+        alert('发布成功')
       }
     } catch (err) {
       console.error('切换发布状态失败', err)
