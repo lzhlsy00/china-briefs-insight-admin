@@ -197,7 +197,12 @@ export const PUT = async (request: NextRequest, context: RouteContext) => {
     }
 
     // 检查是否需要触发 webhook
-    if (existing.status !== 'PUBLISH' && updated.status === 'PUBLISH') {
+    if (
+      existing.status !== 'PUBLISH' &&
+      updated.status === 'PUBLISH' &&
+      (!existing['title-en'] || existing['title-en'].trim().length === 0) &&
+      (!existing['title-ko'] || existing['title-ko'].trim().length === 0)
+    ) {
       await notifyPublishWebhook(updated as News);
     }
 

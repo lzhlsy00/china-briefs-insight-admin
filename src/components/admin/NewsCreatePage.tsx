@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import { useNewsApi } from '@/hooks/useNewsApi'
 import type { NewsCreatePayload, NewsItem, NewsUpdateData } from '@/types/api'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 
 const CATEGORY_OPTIONS = [
   { key: 'politics', en: 'Politics', ko: '정치', cn: '政治' },
@@ -98,6 +101,8 @@ export default function NewsCreatePage({ onBack, onCreated }: NewsCreatePageProp
   const [englishMessage, setEnglishMessage] = useState<string | null>(null)
   const [koreanMessage, setKoreanMessage] = useState<string | null>(null)
   const [pollingTranslations, setPollingTranslations] = useState(false)
+  const [showEnglishPreview, setShowEnglishPreview] = useState(false)
+  const [showKoreanPreview, setShowKoreanPreview] = useState(false)
   const { createNews, updateNews, fetchNewsById, error, clearError } = useNewsApi()
 
   const [publishMessage, setPublishMessage] = useState<string | null>(null)
@@ -348,6 +353,7 @@ const handleChineseCategoryChange = (value: string) => {
   }
 
   return (
+    <>
     <div className="bg-white rounded-lg shadow-md">
       <div className="flex items-center justify-between p-6 border-b border-gray-200">
         <div>
@@ -504,9 +510,19 @@ const handleChineseCategoryChange = (value: string) => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <section className="border border-gray-200 rounded-lg p-4 space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">English Content</h2>
-              <p className="text-sm text-gray-500">自动填充后可修订，保存仅更新英文字段。</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">English Content</h2>
+                <p className="text-sm text-gray-500">自动填充后可修订，保存仅更新英文字段。</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEnglishPreview(true)}
+                className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
+                disabled={savingEnglish || savingChinese}
+              >
+                预览
+              </button>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Title (EN)</label>
@@ -571,9 +587,19 @@ const handleChineseCategoryChange = (value: string) => {
           </section>
 
           <section className="border border-gray-200 rounded-lg p-4 space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">한국어 콘텐츠</h2>
-              <p className="text-sm text-gray-500">审核完修改后保存即可更新韩文字段。</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">한국어 콘텐츠</h2>
+                <p className="text-sm text-gray-500">审核完修改后保存即可更新韩文字段。</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowKoreanPreview(true)}
+                className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
+                disabled={savingKorean || savingChinese}
+              >
+                预览
+              </button>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">제목 (KO)</label>
@@ -658,5 +684,45 @@ const handleChineseCategoryChange = (value: string) => {
           </div>
       </form>
     </div>
+
+      {(showEnglishPreview || showKoreanPreview) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {showEnglishPreview ? 'English Preview' : '한국어 미리보기'}
+                </h3>
+                <p className="text-sm text-gray-500">按前端详情页样式渲染 Markdown 内容</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEnglishPreview(false)
+                  setShowKoreanPreview(false)
+                }}
+                className="text-gray-500 hover:text-gray-800"
+              >
+                关闭
+              </button>
+            </div>
+            <div className="px-6 py-6 max-h-[70vh] overflow-y-auto">
+              <h4 className="text-2xl font-bold text-gray-900 mb-3">
+                {showEnglishPreview ? fields.titleEn || '(No English Title)' : fields.titleKo || '(제목 없음)'}
+              </h4>
+              <div className="text-sm text-gray-500 mb-4 flex gap-4">
+                <span>{fields.categoryEn || fields.categoryKo || fields.categoryCn || 'Uncategorized'}</span>
+                <span>{new Date(isoDateValue).toLocaleString()}</span>
+              </div>
+              <div className="prose max-w-none text-gray-900">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                  {showEnglishPreview ? (fields.contentEn || '(No summary)') : (fields.contentKo || '(요약 없음)')}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
