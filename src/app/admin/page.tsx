@@ -38,7 +38,6 @@ export default function AdminPage() {
 
   const handleNewsCreated: (news?: NewsItem) => void = () => {
     setRefreshSignal((prev) => (prev ?? 0) + 1)
-    setCurrentView('list')
   }
 
   // Loading state

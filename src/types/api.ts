@@ -98,6 +98,10 @@ export interface NewsUpdateData {
   translationEn?: string | null;
   titleKo?: string | null;
   titleEn?: string | null;
+  categoryEn?: string | null;
+  categoryKo?: string | null;
+  aiReasonEn?: string | null;
+  aiReasonKo?: string | null;
 }
 
 export interface NewsUploadData {
@@ -119,7 +123,10 @@ export interface NewsCreatePayload {
   isoDate: string;
   status: 'DRAFT' | 'PUBLISH';
   aiWorth: boolean;
-  primaryLanguage: 'EN' | 'KO';
+  titleCn?: string;
+  contentCn?: string;
+  categoryCn?: string;
+  aiReasonCn?: string;
   titleEn?: string;
   titleKo?: string;
   contentEn?: string;

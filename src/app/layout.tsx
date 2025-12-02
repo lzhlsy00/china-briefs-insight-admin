@@ -1,4 +1,3 @@
-import '@/lib/scheduler/pushDigestScheduler';
 import type { Metadata } from "next";
 import "./globals.css";
 

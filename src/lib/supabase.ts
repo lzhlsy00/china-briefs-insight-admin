@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import '@/lib/scheduler/pushDigestScheduler';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;

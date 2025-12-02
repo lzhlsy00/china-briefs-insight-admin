@@ -13,7 +13,7 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null)
   const [aiFilter, setAiFilter] = useState<'ALL' | 'TRUE' | 'FALSE'>('ALL')
-  const [languageMode, setLanguageMode] = useState<'ALL' | 'EN' | 'KO'>('ALL')
+  const [languageMode, setLanguageMode] = useState<'ALL' | 'EN' | 'KO' | 'CN'>('ALL')
   const [dateSortOrder, setDateSortOrder] = useState<'asc' | 'desc'>('desc')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PUBLISH' | 'DRAFT'>('ALL')
   const [titleFilterInput, setTitleFilterInput] = useState('')
@@ -90,20 +90,35 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
   }
 
   const getDisplayFields = (news: NewsItem) => {
-    const displayLanguage = languageMode === 'KO' ? 'KO' : 'EN'
+    let displayLanguage: 'EN' | 'KO' | 'CN' = 'EN'
+    if (languageMode === 'KO') {
+      displayLanguage = 'KO'
+    } else if (languageMode === 'CN') {
+      displayLanguage = 'CN'
+    }
 
-    const title = displayLanguage === 'KO'
-      ? (news.titleKo?.trim() || news.titleEn?.trim() || news.title)
-      : (news.titleEn?.trim() || news.titleKo?.trim() || news.title);
+    let title = news.title ?? ''
+    if (displayLanguage === 'KO') {
+      title = news.titleKo?.trim() || news.titleEn?.trim() || news.title || ''
+    } else if (displayLanguage === 'CN') {
+      title = (news.title || '').trim() || news.titleEn?.trim() || news.titleKo?.trim() || ''
+    } else {
+      title = news.titleEn?.trim() || news.titleKo?.trim() || news.title || ''
+    }
 
-    const contentSource = displayLanguage === 'KO'
-      ? news.translationKo ?? news.translationEn ?? news.content
-      : news.translationEn ?? news.translationKo ?? news.content;
+    let contentSource: string | null | undefined
+    if (displayLanguage === 'KO') {
+      contentSource = news.translationKo ?? news.translationEn ?? news.content
+    } else if (displayLanguage === 'CN') {
+      contentSource = news.content ?? news.translationEn ?? news.translationKo
+    } else {
+      contentSource = news.translationEn ?? news.translationKo ?? news.content
+    }
 
-    const content = (contentSource ?? '').trim();
+    const content = (contentSource ?? '').trim()
 
-    return { title, content };
-  };
+    return { title, content }
+  }
 
   // Get category style
   const getCategoryStyle = (category: string | null) => {
@@ -235,11 +250,11 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
     updateParams({ page: 1, aiWorth: value === 'TRUE' })
   }
 
-  const handleLanguageChange = (value: 'ALL' | 'EN' | 'KO') => {
+  const handleLanguageChange = (value: 'ALL' | 'EN' | 'KO' | 'CN') => {
     setLanguageMode(value)
     updateParams({
       page: 1,
-      language: value === 'ALL' ? undefined : value,
+      language: value === 'EN' || value === 'KO' ? value : undefined,
     })
   }
 
@@ -253,7 +268,9 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
     const normalize = (value?: string | null) => (value ?? '').trim()
     const predicate = languageMode === 'KO'
       ? (item: NewsItem) => Boolean(normalize(item.titleKo))
-      : (item: NewsItem) => Boolean(normalize(item.titleEn))
+      : languageMode === 'CN'
+        ? (item: NewsItem) => Boolean(normalize(item.title))
+        : (item: NewsItem) => Boolean(normalize(item.titleEn))
 
     return newsList.filter(predicate)
   }, [newsList, languageMode])
@@ -271,6 +288,9 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
   const resolveCategoryLabel = useCallback((item: NewsItem) => {
     if (languageMode === 'KO') {
       return item.categoryKo?.trim() || item.category?.trim() || item.categoryEn?.trim() || ''
+    }
+    if (languageMode === 'CN') {
+      return item.category?.trim() || item.categoryEn?.trim() || item.categoryKo?.trim() || ''
     }
     return item.categoryEn?.trim() || item.category?.trim() || item.categoryKo?.trim() || ''
   }, [languageMode])
@@ -482,13 +502,14 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
             {[
               { label: 'All', value: 'ALL' as const },
               { label: 'English', value: 'EN' as const },
-              { label: 'Korean', value: 'KO' as const }
+              { label: 'Korean', value: 'KO' as const },
+              { label: 'Chinese', value: 'CN' as const }
             ].map((option, index) => (
               <button
                 key={option.value}
                 onClick={() => handleLanguageChange(option.value)}
                 className={`px-3 py-1 text-sm transition-colors duration-200 ${
-                  index === 0 ? 'rounded-l-md' : index === 2 ? 'rounded-r-md' : ''
+                  index === 0 ? 'rounded-l-md' : index === 3 ? 'rounded-r-md' : ''
                 } ${
                   languageMode === option.value
                     ? 'bg-blue-600 text-white'

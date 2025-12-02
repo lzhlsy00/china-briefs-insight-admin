@@ -107,6 +107,10 @@ const updateSchema = z
     titleEn: z.string().max(1000, '英文标题长度不能超过1000字符').nullish(),
     translationKo: z.string().max(5000, '韩文摘要长度不能超过5000字符').nullish(),
     translationEn: z.string().max(5000, '英文摘要长度不能超过5000字符').nullish(),
+    categoryEn: z.string().max(100, '英文分类长度不能超过100字符').nullish(),
+    categoryKo: z.string().max(100, '韩文分类长度不能超过100字符').nullish(),
+    aiReasonEn: z.string().max(2000, '英文 AI 理由长度不能超过2000字符').nullish(),
+    aiReasonKo: z.string().max(2000, '韩文 AI 理由长度不能超过2000字符').nullish(),
     status: statusSchema.optional(),
   })
   .refine((data) => Object.values(data).some((value) => value !== undefined), {
@@ -129,6 +133,10 @@ const buildUpdateData = (input: UpdateInput): Record<string, unknown> => {
   if (input.titleEn !== undefined) data['title-en'] = input.titleEn ?? null;
   if (input.translationKo !== undefined) data['translation-ko'] = input.translationKo ?? null;
   if (input.translationEn !== undefined) data['translation-en'] = input.translationEn ?? null;
+  if (input.categoryEn !== undefined) data['category-en'] = input.categoryEn ?? null;
+  if (input.categoryKo !== undefined) data['category-ko'] = input.categoryKo ?? null;
+  if (input.aiReasonEn !== undefined) data.ai_reason_en = input.aiReasonEn ?? null;
+  if (input.aiReasonKo !== undefined) data.ai_reason_ko = input.aiReasonKo ?? null;
   if (input.status !== undefined) data.status = input.status;
 
   return data;

@@ -2,7 +2,6 @@ import { supabase } from '@/lib/supabase';
 import { handleRouteError } from '@/lib/api/error';
 import { successResponse } from '@/lib/api/response';
 import { serializeNews, serializeNewsList } from '@/lib/api/serializers';
-import { translateNewsFields } from '@/lib/ai/newsTranslator';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
@@ -39,33 +38,25 @@ const isoDateSchema = z
 
 const statusSchema = z.enum(['DRAFT', 'PUBLISH']);
 
-const languageSchema = z.enum(['EN', 'KO']);
-
 const textField = (limit: number) => z.string().max(limit).optional();
 
-const createSchema = z
-  .object({
-    isoDate: isoDateSchema,
-    status: statusSchema.default('DRAFT'),
-    aiWorth: z.boolean().default(true),
-    primaryLanguage: languageSchema.default('EN'),
-    titleEn: z.string().max(1000).optional(),
-    titleKo: z.string().max(1000).optional(),
-    contentEn: textField(5000),
-    contentKo: textField(5000),
-    categoryEn: textField(100),
-    categoryKo: textField(100),
-    aiReasonEn: textField(2000),
-    aiReasonKo: textField(2000),
-  })
-  .refine(
-    (value) => {
-      const hasEn = typeof value.titleEn === 'string' && value.titleEn.trim().length > 0;
-      const hasKo = typeof value.titleKo === 'string' && value.titleKo.trim().length > 0;
-      return hasEn || hasKo;
-    },
-    { message: '请至少填写一个语言版本的标题', path: ['titleEn'] },
-  );
+const createSchema = z.object({
+  isoDate: isoDateSchema,
+  status: statusSchema.default('DRAFT'),
+  aiWorth: z.boolean().default(true),
+  titleCn: z.string().min(1, '中文标题不能为空').max(1000),
+  contentCn: textField(5000),
+  categoryCn: textField(100),
+  aiReasonCn: textField(2000),
+  titleEn: z.string().max(1000).optional(),
+  titleKo: z.string().max(1000).optional(),
+  contentEn: textField(5000),
+  contentKo: textField(5000),
+  categoryEn: textField(100),
+  categoryKo: textField(100),
+  aiReasonEn: textField(2000),
+  aiReasonKo: textField(2000),
+});
 
 type CreateInput = z.infer<typeof createSchema>;
 
@@ -81,6 +72,10 @@ const sanitizeCreateInput = (input: CreateInput) => {
   return {
     ...input,
     isoDate: new Date(input.isoDate).toISOString(),
+    titleCn: safeTrim(input.titleCn) ?? '',
+    contentCn: safeTrim(input.contentCn),
+    categoryCn: safeTrim(input.categoryCn),
+    aiReasonCn: safeTrim(input.aiReasonCn),
     titleEn: safeTrim(input.titleEn),
     titleKo: safeTrim(input.titleKo),
     contentEn: safeTrim(input.contentEn),
@@ -91,6 +86,10 @@ const sanitizeCreateInput = (input: CreateInput) => {
     aiReasonKo: safeTrim(input.aiReasonKo),
   } as CreateInput & {
     isoDate: string;
+    titleCn: string;
+    contentCn: string | null;
+    categoryCn: string | null;
+    aiReasonCn: string | null;
     titleEn: string | null;
     titleKo: string | null;
     contentEn: string | null;
@@ -116,13 +115,14 @@ const buildCreateData = (input: ReturnType<typeof sanitizeCreateInput>) => {
     iso_date: input.isoDate,
     status: input.status,
     ai_worth: input.aiWorth,
-    title: input.titleEn ?? input.titleKo ?? 'Untitled',
-    content: input.contentEn ?? input.contentKo ?? null,
-    category: input.categoryEn ?? input.categoryKo ?? null,
-    ai_reason: input.aiReasonEn ?? input.aiReasonKo ?? null,
+    title: input.titleCn,
+    content: input.contentCn ?? null,
+    category: input.categoryCn ?? null,
+    ai_reason: input.aiReasonCn ?? null,
     link: buildManualLink(),
   };
 
+  if (input.titleCn) data.title = input.titleCn;
   if (input.titleEn) data['title-en'] = input.titleEn;
   if (input.titleKo) data['title-ko'] = input.titleKo;
   if (input.contentEn) data['translation-en'] = input.contentEn;
@@ -135,46 +135,59 @@ const buildCreateData = (input: ReturnType<typeof sanitizeCreateInput>) => {
   return data;
 };
 
-const applyTranslations = (
-  insertData: Record<string, unknown>,
-  input: ReturnType<typeof sanitizeCreateInput>,
-  translations: Awaited<ReturnType<typeof translateNewsFields>>, 
-  targetLanguage: 'EN' | 'KO',
-) => {
-  if (!translations) {
+type SupabaseNewsRecord = {
+  id: number;
+  title: string;
+  iso_date: string;
+  link: string;
+  content: string | null;
+  ai_worth: boolean | null;
+  ai_reason: string | null;
+  ai_reason_en: string | null;
+  ai_reason_ko: string | null;
+  'translation-ko': string | null;
+  'translation-en': string | null;
+  'title-ko': string | null;
+  'title-en': string | null;
+  category: string | null;
+  status: string;
+};
+
+const PUBLISH_WEBHOOK_URL = process.env.PUBLISH_WEBHOOK_URL || '';
+
+const notifyPublishWebhook = async (news: SupabaseNewsRecord) => {
+  if (!PUBLISH_WEBHOOK_URL) {
     return;
   }
 
-  if (targetLanguage === 'KO') {
-    if (!input.titleKo && translations.title) {
-      insertData['title-ko'] = translations.title;
+  try {
+    const response = await fetch(PUBLISH_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: news.id,
+        title: news.title,
+        isoDate: news.iso_date,
+        link: news.link,
+        content: news.content,
+        category: news.category,
+        status: news.status,
+        aiWorth: news.ai_worth,
+        aiReason: news.ai_reason,
+        aiReasonEn: news.ai_reason_en,
+        aiReasonKo: news.ai_reason_ko,
+        translationKo: news['translation-ko'],
+        translationEn: news['translation-en'],
+        titleKo: news['title-ko'],
+        titleEn: news['title-en'],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('发布 webhook 调用失败', response.status);
     }
-    if (!input.contentKo && translations.content) {
-      insertData['translation-ko'] = translations.content;
-    }
-    if (!input.categoryKo && translations.category) {
-      insertData['category-ko'] = translations.category;
-    }
-    if (!input.aiReasonKo && translations.aiReason) {
-      insertData.ai_reason_ko = translations.aiReason;
-    }
-  } else {
-    if (!input.titleEn && translations.title) {
-      insertData['title-en'] = translations.title;
-      insertData.title = insertData.title ?? translations.title;
-    }
-    if (!input.contentEn && translations.content) {
-      insertData['translation-en'] = translations.content;
-      insertData.content = insertData.content ?? translations.content;
-    }
-    if (!input.categoryEn && translations.category) {
-      insertData['category-en'] = translations.category;
-      insertData.category = insertData.category ?? translations.category;
-    }
-    if (!input.aiReasonEn && translations.aiReason) {
-      insertData.ai_reason_en = translations.aiReason;
-      insertData.ai_reason = insertData.ai_reason ?? translations.aiReason;
-    }
+  } catch (error) {
+    console.error('发布 webhook 异常', error);
   }
 };
 
@@ -264,28 +277,6 @@ export const POST = async (request: NextRequest) => {
     const sanitized = sanitizeCreateInput(parsed);
     const insertData = buildCreateData(sanitized);
 
-    if (sanitized.status === 'PUBLISH') {
-      const targetLanguage = sanitized.primaryLanguage === 'EN' ? 'KO' : 'EN';
-      const needsTranslation = targetLanguage === 'KO'
-        ? !sanitized.titleKo || !sanitized.contentKo || !sanitized.categoryKo || !sanitized.aiReasonKo
-        : !sanitized.titleEn || !sanitized.contentEn || !sanitized.categoryEn || !sanitized.aiReasonEn;
-
-      if (needsTranslation) {
-        const translations = await translateNewsFields({
-          sourceLanguage: sanitized.primaryLanguage,
-          targetLanguage,
-          fields: {
-            title: sanitized.primaryLanguage === 'EN' ? sanitized.titleEn : sanitized.titleKo,
-            content: sanitized.primaryLanguage === 'EN' ? sanitized.contentEn : sanitized.contentKo,
-            category: sanitized.primaryLanguage === 'EN' ? sanitized.categoryEn : sanitized.categoryKo,
-            aiReason: sanitized.primaryLanguage === 'EN' ? sanitized.aiReasonEn : sanitized.aiReasonKo,
-          },
-        });
-
-        applyTranslations(insertData, sanitized, translations, targetLanguage);
-      }
-    }
-
     const { data: created, error } = await supabase
       .from('news')
       .insert(insertData)
@@ -295,6 +286,8 @@ export const POST = async (request: NextRequest) => {
     if (error || !created) {
       throw error || new Error('创建新闻失败');
     }
+
+    await notifyPublishWebhook(created as SupabaseNewsRecord);
 
     return successResponse(serializeNews(created), { status: 201, message: '新闻创建成功' });
   } catch (error) {
