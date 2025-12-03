@@ -335,7 +335,26 @@ const handleChineseCategoryChange = (value: string) => {
     try {
       const updated = await updateNews(createdNewsId, updatePayload)
       if (updated) {
-        populateFormFromNews(updated)
+        setFields((prev) => {
+          if (locale === 'EN') {
+            return {
+              ...prev,
+              titleEn: updated.titleEn ?? prev.titleEn,
+              contentEn: updated.translationEn ?? prev.contentEn,
+              categoryEn: updated.categoryEn ?? prev.categoryEn,
+              aiReasonEn: updated.aiReasonEn ?? prev.aiReasonEn,
+            }
+          }
+
+          return {
+            ...prev,
+            titleKo: updated.titleKo ?? prev.titleKo,
+            contentKo: updated.translationKo ?? prev.contentKo,
+            categoryKo: updated.categoryKo ?? prev.categoryKo,
+            aiReasonKo: updated.aiReasonKo ?? prev.aiReasonKo,
+          }
+        })
+
         if (locale === 'EN') {
           setEnglishMessage('英文内容已保存')
         } else {
