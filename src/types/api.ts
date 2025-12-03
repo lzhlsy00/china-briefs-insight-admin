@@ -30,6 +30,7 @@ export interface NewsItem {
   titleEn: string | null;
   aiReasonEn?: string | null;
   aiReasonKo?: string | null;
+  heroImageUrl?: string | null;
 }
 
 // 分页信息
@@ -102,6 +103,7 @@ export interface NewsUpdateData {
   categoryKo?: string | null;
   aiReasonEn?: string | null;
   aiReasonKo?: string | null;
+  heroImageUrl?: string | null;
 }
 
 export interface NewsUploadData {
@@ -117,6 +119,7 @@ export interface NewsUploadData {
   translationEn?: string | null;
   titleKo?: string | null;
   titleEn?: string | null;
+  heroImageUrl?: string | null;
 }
 
 export interface NewsCreatePayload {
@@ -135,4 +138,19 @@ export interface NewsCreatePayload {
   categoryKo?: string;
   aiReasonEn?: string;
   aiReasonKo?: string;
+  heroImageUrl?: string;
+}
+
+export interface HeroImageUploadRequest {
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+}
+
+export interface HeroImageUploadResponse {
+  path: string;
+  uploadUrl: string;
+  token?: string;
+  publicUrl?: string | null;
+  bucket: string;
 }

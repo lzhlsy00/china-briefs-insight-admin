@@ -7,6 +7,8 @@ import {
   BaseResponse,
   StatsResponse,
   NewsCreatePayload,
+  HeroImageUploadRequest,
+  HeroImageUploadResponse,
 } from '../types/api';
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || '/api/v1').replace(/\/$/, '');
@@ -158,6 +160,10 @@ export const newsApi = {
 
   uploadNews: async (data: NewsUploadData): Promise<BaseResponse<NewsItem>> => {
     return apiClient.post<BaseResponse<NewsItem>>('/upload', data);
+  },
+
+  getHeroImageUploadUrl: async (data: HeroImageUploadRequest): Promise<BaseResponse<HeroImageUploadResponse>> => {
+    return apiClient.post<BaseResponse<HeroImageUploadResponse>>('/uploads/news-hero-image', data);
   },
 };
 

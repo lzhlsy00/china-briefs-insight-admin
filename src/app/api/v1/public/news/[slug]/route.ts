@@ -40,6 +40,7 @@ export const GET = async (request: NextRequest, context: RouteContext) => {
       ai_worth,
       ai_reason_en,
       ai_reason_ko,
+      hero_image_url,
       'translation-ko': translationKo,
       'translation-en': translationEn,
       'title-ko': titleKo,
@@ -59,6 +60,7 @@ export const GET = async (request: NextRequest, context: RouteContext) => {
       translationEn,
       titleKo,
       titleEn,
+      heroImageUrl: hero_image_url ?? null,
     };
 
     return applyCorsHeaders(successResponse(response), request);

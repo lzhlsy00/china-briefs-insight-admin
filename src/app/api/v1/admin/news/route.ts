@@ -56,6 +56,11 @@ const createSchema = z.object({
   categoryKo: textField(100),
   aiReasonEn: textField(2000),
   aiReasonKo: textField(2000),
+  heroImageUrl: z
+    .string()
+    .url('封面图片链接格式不正确，请提供有效URL')
+    .max(2048)
+    .optional(),
 });
 
 type CreateInput = z.infer<typeof createSchema>;
@@ -84,6 +89,7 @@ const sanitizeCreateInput = (input: CreateInput) => {
     categoryKo: safeTrim(input.categoryKo),
     aiReasonEn: safeTrim(input.aiReasonEn),
     aiReasonKo: safeTrim(input.aiReasonKo),
+    heroImageUrl: safeTrim(input.heroImageUrl),
   } as CreateInput & {
     isoDate: string;
     titleCn: string;
@@ -98,6 +104,7 @@ const sanitizeCreateInput = (input: CreateInput) => {
     categoryKo: string | null;
     aiReasonEn: string | null;
     aiReasonKo: string | null;
+    heroImageUrl: string | null;
   };
 };
 
@@ -131,6 +138,7 @@ const buildCreateData = (input: ReturnType<typeof sanitizeCreateInput>) => {
   if (input.categoryKo) data['category-ko'] = input.categoryKo;
   if (input.aiReasonEn) data.ai_reason_en = input.aiReasonEn;
   if (input.aiReasonKo) data.ai_reason_ko = input.aiReasonKo;
+  data.hero_image_url = input.heroImageUrl ?? null;
 
   return data;
 };
@@ -145,6 +153,7 @@ type SupabaseNewsRecord = {
   ai_reason: string | null;
   ai_reason_en: string | null;
   ai_reason_ko: string | null;
+  hero_image_url: string | null;
   'translation-ko': string | null;
   'translation-en': string | null;
   'title-ko': string | null;
@@ -180,6 +189,7 @@ const notifyPublishWebhook = async (news: SupabaseNewsRecord) => {
         translationEn: news['translation-en'],
         titleKo: news['title-ko'],
         titleEn: news['title-en'],
+        heroImageUrl: news.hero_image_url,
       }),
     });
 

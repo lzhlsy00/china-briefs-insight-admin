@@ -72,6 +72,7 @@ export const GET = async (request: NextRequest) => {
         ai_worth,
         ai_reason_en,
         ai_reason_ko,
+        hero_image_url,
         'translation-ko': translationKo,
         'translation-en': translationEn,
         'title-ko': titleKo,
@@ -91,6 +92,7 @@ export const GET = async (request: NextRequest) => {
         translationEn,
         titleKo,
         titleEn,
+        heroImageUrl: hero_image_url ?? null,
       };
     });
 

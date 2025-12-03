@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState, type ChangeEvent } from 'react'
 import { useNewsApi } from '@/hooks/useNewsApi'
 import type { NewsCreatePayload, NewsItem, NewsUpdateData } from '@/types/api'
+import { newsApi } from '@/services/newsApi'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
+import Image from 'next/image'
 
 const CATEGORY_OPTIONS = [
   { key: 'politics', en: 'Politics', ko: '정치', cn: '政治' },
@@ -65,6 +67,7 @@ type FormFields = {
   contentKo: string
   categoryKo: string
   aiReasonKo: string
+  heroImageUrl: string
 }
 
 const INITIAL_FIELDS: FormFields = {
@@ -80,12 +83,16 @@ const INITIAL_FIELDS: FormFields = {
   contentKo: '',
   categoryKo: '',
   aiReasonKo: '',
+  heroImageUrl: '',
 }
 
 const normalizeValue = (value: string) => {
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : undefined
 }
+
+const HERO_IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp'
+const HERO_IMAGE_MAX_SIZE = 2 * 1024 * 1024
 
 export default function NewsCreatePage({ onBack, onCreated }: NewsCreatePageProps) {
   const [fields, setFields] = useState<FormFields>(INITIAL_FIELDS)
@@ -106,8 +113,11 @@ export default function NewsCreatePage({ onBack, onCreated }: NewsCreatePageProp
   const { createNews, updateNews, fetchNewsById, error, clearError } = useNewsApi()
 
   const [publishMessage, setPublishMessage] = useState<string | null>(null)
+  const [heroImageError, setHeroImageError] = useState<string | null>(null)
+  const [heroImageUploading, setHeroImageUploading] = useState(false)
+  const heroImageInputRef = useRef<HTMLInputElement | null>(null)
 
-  const anySaving = savingChinese || savingEnglish || savingKorean || pollingTranslations
+  const anySaving = savingChinese || savingEnglish || savingKorean || pollingTranslations || heroImageUploading
 
 const handleFieldChange = (field: keyof FormFields, value: string) => {
   setFields((prev) => ({ ...prev, [field]: value }))
@@ -123,6 +133,74 @@ const handleChineseCategoryChange = (value: string) => {
   }))
 }
 
+  const handleHeroImageRemove = () => {
+    setHeroImageError(null)
+    setFields((prev) => ({ ...prev, heroImageUrl: '' }))
+  }
+
+  const uploadHeroImage = async (file: File) => {
+    try {
+      setHeroImageError(null)
+      setHeroImageUploading(true)
+
+      if (!file.type.startsWith('image/')) {
+        throw new Error('仅支持上传图片文件')
+      }
+      if (file.size > HERO_IMAGE_MAX_SIZE) {
+        throw new Error('图片大小不能超过 2MB')
+      }
+
+      const response = await newsApi.getHeroImageUploadUrl({
+        fileName: file.name,
+        fileType: file.type || 'application/octet-stream',
+        fileSize: file.size,
+      })
+
+      if (!response.success || !response.data) {
+        throw new Error(response.message || '获取上传链接失败')
+      }
+
+      const uploadInfo = response.data
+
+      const uploadResult = await fetch(uploadInfo.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'x-upsert': 'true',
+        },
+        body: file,
+      })
+
+      if (!uploadResult.ok) {
+        throw new Error('封面图片上传失败，请重试')
+      }
+
+      const finalUrl = uploadInfo.publicUrl
+      if (!finalUrl) {
+        throw new Error('未能生成封面图片访问地址，请检查存储桶权限')
+      }
+
+      setFields((prev) => ({ ...prev, heroImageUrl: finalUrl }))
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : '封面图片上传失败'
+      setHeroImageError(message)
+    } finally {
+      setHeroImageUploading(false)
+      if (heroImageInputRef.current) {
+        heroImageInputRef.current.value = ''
+      }
+    }
+  }
+
+  const handleHeroImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    await uploadHeroImage(file)
+  }
+
   const populateFormFromNews = (news: NewsItem) => {
     setFields({
       titleCn: news.title ?? '',
@@ -137,6 +215,7 @@ const handleChineseCategoryChange = (value: string) => {
       contentKo: news.translationKo ?? '',
       categoryKo: news.categoryKo ?? '',
       aiReasonKo: news.aiReasonKo ?? '',
+      heroImageUrl: news.heroImageUrl ?? '',
     })
     const parsedDate = new Date(news.isoDate)
     if (!Number.isNaN(parsedDate.getTime())) {
@@ -214,6 +293,7 @@ const handleChineseCategoryChange = (value: string) => {
       categoryKo: normalizeValue(fields.categoryKo),
       aiReasonEn: normalizeValue(fields.aiReasonEn),
       aiReasonKo: normalizeValue(fields.aiReasonKo),
+      heroImageUrl: normalizeValue(fields.heroImageUrl),
     }
 
     setFormError(null)
@@ -249,6 +329,7 @@ const handleChineseCategoryChange = (value: string) => {
           categoryKo: payload.categoryKo,
           aiReasonEn: payload.aiReasonEn,
           aiReasonKo: payload.aiReasonKo,
+          heroImageUrl: payload.heroImageUrl ?? null,
         }
         const updated = await updateNews(createdNewsId, updatePayload)
         if (updated) {
@@ -456,6 +537,79 @@ const handleChineseCategoryChange = (value: string) => {
             />
           </div>
         </div>
+
+        <section className="border border-gray-200 rounded-lg p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">封面图片</h2>
+              <p className="text-sm text-gray-500">上传一张 16:9 封面图，默认展示在正文顶部。</p>
+            </div>
+            {fields.heroImageUrl && (
+              <button
+                type="button"
+                onClick={handleHeroImageRemove}
+                className="text-sm text-red-600 hover:text-red-800"
+                disabled={heroImageUploading || savingChinese}
+              >
+                移除图片
+              </button>
+            )}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="relative aspect-video rounded-xl border border-dashed border-gray-300 bg-gray-50 overflow-hidden">
+              {fields.heroImageUrl ? (
+                <Image
+                  src={fields.heroImageUrl}
+                  alt="封面图预览"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  className="object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">
+                  暂无封面图
+                </div>
+              )}
+              {heroImageUploading && (
+                <div className="absolute inset-0 bg-white/70 flex items-center justify-center text-sm text-blue-600">
+                  上传中...
+                </div>
+              )}
+            </div>
+            <div className="space-y-3">
+              <input
+                ref={heroImageInputRef}
+                type="file"
+                accept={HERO_IMAGE_ACCEPT}
+                className="hidden"
+                onChange={handleHeroImageChange}
+                disabled={heroImageUploading || savingChinese}
+              />
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => heroImageInputRef.current?.click()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  disabled={heroImageUploading || savingChinese}
+                >
+                  {fields.heroImageUrl ? '重新上传' : '上传封面图'}
+                </button>
+                {fields.heroImageUrl && (
+                  <a
+                    href={fields.heroImageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    查看原图
+                  </a>
+                )}
+              </div>
+              <p className="text-xs text-gray-500">支持 JPG、PNG、WebP；文件大小不超过 2MB。</p>
+              {heroImageError && <p className="text-xs text-red-600">{heroImageError}</p>}
+            </div>
+          </div>
+        </section>
 
         <section className="border border-gray-200 rounded-lg p-4 space-y-4">
           <div>
@@ -728,6 +882,18 @@ const handleChineseCategoryChange = (value: string) => {
               </button>
             </div>
             <div className="px-6 py-6 max-h-[70vh] overflow-y-auto">
+              {fields.heroImageUrl && (
+                <div className="relative w-full max-h-80 mb-6 rounded-2xl overflow-hidden">
+                  <Image
+                    src={fields.heroImageUrl}
+                    alt="Hero"
+                    width={1200}
+                    height={675}
+                    className="w-full h-full object-cover"
+                    sizes="(max-width: 768px) 100vw, 768px"
+                  />
+                </div>
+              )}
               <h4 className="text-2xl font-bold text-gray-900 mb-3">
                 {showEnglishPreview ? fields.titleEn || '(No English Title)' : fields.titleKo || '(제목 없음)'}
               </h4>

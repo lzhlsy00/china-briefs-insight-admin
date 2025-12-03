@@ -10,6 +10,7 @@ type SupabaseNews = {
   ai_reason: string | null;
   ai_reason_en: string | null;
   ai_reason_ko: string | null;
+  hero_image_url?: string | null;
   'translation-ko': string | null;
   'translation-en': string | null;
   'title-ko': string | null;
@@ -35,6 +36,7 @@ export type SerializedNews = {
   aiReason: string | null;
   aiReasonEn: string | null;
   aiReasonKo: string | null;
+  heroImageUrl?: string | null;
   translationKo: string | null;
   translationEn: string | null;
   titleKo: string | null;
@@ -60,6 +62,7 @@ export const serializeNews = (news: SupabaseNews): SerializedNews => {
     aiReason: news.ai_reason,
     aiReasonEn: news.ai_reason_en,
     aiReasonKo: news.ai_reason_ko,
+    heroImageUrl: news.hero_image_url ?? null,
     translationKo: news['translation-ko'],
     translationEn: news['translation-en'],
     titleKo: news['title-ko'],

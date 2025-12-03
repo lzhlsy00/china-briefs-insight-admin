@@ -15,6 +15,7 @@ type News = {
   ai_reason: string | null;
   ai_reason_en: string | null;
   ai_reason_ko: string | null;
+  hero_image_url: string | null;
   'translation-ko': string | null;
   'translation-en': string | null;
   'title-ko': string | null;
@@ -67,6 +68,7 @@ const notifyPublishWebhook = async (news: News) => {
         translationEn: news['translation-en'],
         titleKo: news['title-ko'],
         titleEn: news['title-en'],
+        heroImageUrl: news.hero_image_url,
       }),
     });
 
@@ -111,6 +113,7 @@ const updateSchema = z
     categoryKo: z.string().max(100, '韩文分类长度不能超过100字符').nullish(),
     aiReasonEn: z.string().max(2000, '英文 AI 理由长度不能超过2000字符').nullish(),
     aiReasonKo: z.string().max(2000, '韩文 AI 理由长度不能超过2000字符').nullish(),
+    heroImageUrl: z.string().url('封面图片链接格式不正确').max(2048).nullish(),
     status: statusSchema.optional(),
   })
   .refine((data) => Object.values(data).some((value) => value !== undefined), {
@@ -137,6 +140,7 @@ const buildUpdateData = (input: UpdateInput): Record<string, unknown> => {
   if (input.categoryKo !== undefined) data['category-ko'] = input.categoryKo ?? null;
   if (input.aiReasonEn !== undefined) data.ai_reason_en = input.aiReasonEn ?? null;
   if (input.aiReasonKo !== undefined) data.ai_reason_ko = input.aiReasonKo ?? null;
+  if (input.heroImageUrl !== undefined) data.hero_image_url = input.heroImageUrl ?? null;
   if (input.status !== undefined) data.status = input.status;
 
   return data;
