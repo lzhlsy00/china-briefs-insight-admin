@@ -39,6 +39,28 @@ export async function POST(request: NextRequest) {
       return errorResponse('User ID is required', { status: 400 })
     }
 
+    // Get IP and determine locale
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || request.headers.get('x-real-ip') || '127.0.0.1'
+    let locale = 'EN' // Default to EN
+
+    try {
+      // Skip IP check for localhost/private IPs in development if needed, 
+      // but for now we try to fetch. If it fails or is local, it stays EN.
+      if (ip && ip !== '127.0.0.1' && ip !== '::1' && !ip.startsWith('192.168.') && !ip.startsWith('10.')) {
+        const geoResponse = await fetch(`http://ip-api.com/json/${ip}?fields=countryCode`, {
+          signal: AbortSignal.timeout(3000) // 3s timeout
+        })
+        if (geoResponse.ok) {
+          const geoData = await geoResponse.json()
+          if (geoData.countryCode === 'KR') {
+            locale = 'KO'
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch geo data for IP:', ip, e)
+    }
+
     const { data: existingById, error: fetchByIdError } = await supabase
       .from('user_profiles')
       .select('id, email, subscription_status, created_at')
@@ -51,13 +73,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingById) {
-      if (!existingById.email && email) {
-        await supabase
-          .from('user_profiles')
-          .update({ email, updated_at: new Date().toISOString() })
-          .eq('id', userId)
-          .single()
+      // Update email and locale if needed
+      const updates: Record<string, string | number | boolean | null> = {
+        updated_at: new Date().toISOString(),
+        locale: locale
       }
+
+      if (!existingById.email && email) {
+        updates.email = email
+      }
+
+      await supabase
+        .from('user_profiles')
+        .update(updates)
+        .eq('id', userId)
+        .single()
 
       return successResponse({
         user: {
@@ -89,6 +119,15 @@ export async function POST(request: NextRequest) {
         })
       }
 
+      // Update locale for existing user found by email
+      await supabase
+        .from('user_profiles')
+        .update({
+          updated_at: new Date().toISOString(),
+          locale: locale
+        })
+        .eq('id', existingByEmail.id)
+
       return successResponse({
         user: {
           id: existingByEmail.id,
@@ -111,6 +150,7 @@ export async function POST(request: NextRequest) {
         created_at: now,
         updated_at: now,
         transactions: 0,
+        locale: locale,
       })
       .select('id, email, subscription_status, created_at')
       .single<UserProfileRecord>()
