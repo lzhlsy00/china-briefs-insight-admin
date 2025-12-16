@@ -149,13 +149,21 @@ const formatDigest = (
   }
 
   const helper = localeHelpers[locale];
+  const formatLinkForDisplay = (url: string) => {
+    try {
+      return decodeURI(url);
+    } catch (_) {
+      return url;
+    }
+  };
 
   return entries
     .map((entry, index) => {
+      const linkText = entry.link ? formatLinkForDisplay(entry.link) : '';
       const lines = [
         `🔹 ${index + 1}. ${entry.title}`,
         entry.summary,
-        entry.link ? `${helper.callToAction}: ${entry.link}` : helper.callToAction,
+        entry.link ? `${helper.callToAction}: ${linkText}` : helper.callToAction,
       ];
       return lines.join('\n');
     })
