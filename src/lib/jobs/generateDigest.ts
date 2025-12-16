@@ -151,8 +151,8 @@ const formatDigest = (
   const helper = localeHelpers[locale];
   const formatLinkForDisplay = (url: string) => {
     try {
-      return decodeURI(url);
-    } catch (_) {
+      return decodeURIComponent(url);
+    } catch {
       return url;
     }
   };
@@ -163,7 +163,7 @@ const formatDigest = (
       const lines = [
         `🔹 ${index + 1}. ${entry.title}`,
         entry.summary,
-        entry.link ? `${helper.callToAction}: ${linkText}` : helper.callToAction,
+        entry.link ? `${helper.callToAction}: <a href="${entry.link}" style="color: #3b82f6; text-decoration: underline;">${linkText}</a>` : helper.callToAction,
       ];
       return lines.join('\n');
     })
@@ -193,6 +193,91 @@ type SuccessfulDigestJobResult = Extract<DigestJobResult, { created: true }>;
 
 type DigestJobOptions = {
   newsIds?: number[];
+};
+
+const translateTemplateFields = async (
+  fields: {
+    title: string | null;
+    subject: string | null;
+    banner: string | null;
+    footer: string | null;
+  },
+  locale: DigestLocale
+) => {
+  if (locale !== 'KO') {
+    return fields;
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || !OPENAI_BASE_URL) {
+    console.warn('OpenAI configuration missing, skipping template translation');
+    return fields;
+  }
+
+  const baseUrl = requireOpenAIBaseUrl();
+
+  // Filter out null values for translation
+  const toTranslate: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (value) {
+      toTranslate[key] = value;
+    }
+  }
+
+  if (Object.keys(toTranslate).length === 0) {
+    return fields;
+  }
+
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        temperature: 0,
+        response_format: { type: 'json_object' as const },
+        messages: [
+          {
+            role: 'system',
+            content: 'Translate email template fields to Korean. Maintain professional tone suitable for newsletters.',
+          },
+          {
+            role: 'user',
+            content: `Translate these fields to Korean and return as JSON with the same keys:\n${JSON.stringify(toTranslate, null, 2)}`,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn('Template translation failed', response.status);
+      return fields;
+    }
+
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+      return fields;
+    }
+
+    const translated = JSON.parse(content) as Record<string, string>;
+    
+    return {
+      title: translated.title ?? fields.title,
+      subject: translated.subject ?? fields.subject,
+      banner: translated.banner ?? fields.banner,
+      footer: translated.footer ?? fields.footer,
+    };
+  } catch (error) {
+    console.warn('Template translation error', error);
+    return fields;
+  }
 };
 
 const translateDigestItems = async (
@@ -469,14 +554,25 @@ export const runDigestGenerationJob = async (options?: DigestJobOptions): Promis
       continue;
     }
 
+    // Translate template fields for Korean version
+    const templateFields = await translateTemplateFields(
+      {
+        title: pushTitle,
+        subject: pushSubject,
+        banner: pushBanner,
+        footer: pushFooter,
+      },
+      locale
+    );
+
     const { data: inserted, error: insertError } = await supabase
       .from('push_content')
       .insert({
-        title: pushTitle,
-        subject: pushSubject,
+        title: templateFields.title,
+        subject: templateFields.subject,
         logo: pushLogo,
-        banner: pushBanner,
-        footer: pushFooter,
+        banner: templateFields.banner,
+        footer: templateFields.footer,
         content: digestContent,
         date: isoDate,
         published: false,
