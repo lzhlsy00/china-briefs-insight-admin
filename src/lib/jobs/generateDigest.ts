@@ -519,6 +519,12 @@ export const runDigestGenerationJob = async (options?: DigestJobOptions): Promis
     const replaced = value.replaceAll('{{date}}', nowDate).trim();
     return replaced.length > 0 ? replaced : null;
   };
+  
+  // Clean function to remove newlines from single-line fields
+  const cleanSingleLine = (value: string | null): string | null => {
+    if (!value) return value;
+    return value.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+  };
 
   const pushTitle = applyPlaceholders(template.title) ?? digestTitle;
   const pushSubject = applyPlaceholders(template.subject) ?? digestTitle;
@@ -568,8 +574,8 @@ export const runDigestGenerationJob = async (options?: DigestJobOptions): Promis
     const { data: inserted, error: insertError } = await supabase
       .from('push_content')
       .insert({
-        title: templateFields.title,
-        subject: templateFields.subject,
+        title: cleanSingleLine(templateFields.title),
+        subject: cleanSingleLine(templateFields.subject),
         logo: pushLogo,
         banner: templateFields.banner,
         footer: templateFields.footer,
