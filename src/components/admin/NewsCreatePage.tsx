@@ -110,7 +110,7 @@ export default function NewsCreatePage({ onBack, onCreated }: NewsCreatePageProp
   const [pollingTranslations, setPollingTranslations] = useState(false)
   const [showEnglishPreview, setShowEnglishPreview] = useState(false)
   const [showKoreanPreview, setShowKoreanPreview] = useState(false)
-  const { createNews, updateNews, fetchNewsById, error, clearError } = useNewsApi()
+  const { createNews, updateNews, error, clearError } = useNewsApi()
 
   const [publishMessage, setPublishMessage] = useState<string | null>(null)
   const [heroImageError, setHeroImageError] = useState<string | null>(null)

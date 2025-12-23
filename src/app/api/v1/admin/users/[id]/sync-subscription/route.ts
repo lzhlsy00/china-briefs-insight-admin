@@ -28,9 +28,7 @@ export const POST = async (_request: NextRequest, context: RouteContext) => {
     const result = await syncUserSubscriptionStatus(user.email);
 
     if (!result.success) {
-      return errorResponse(result.message, { 
-        error: result.error 
-      });
+      return errorResponse(result.message);
     }
 
     return successResponse({

@@ -85,7 +85,10 @@ export async function syncUserSubscriptionStatus(email: string): Promise<SyncRes
           }
         } else {
           // 正常订阅
-          const extSub = activeSubscription as any;
+          const extSub = activeSubscription as Stripe.Subscription & {
+            current_period_start?: number;
+            current_period_end?: number;
+          };
           if (extSub.current_period_start) {
             periodStart = new Date(extSub.current_period_start * 1000).toISOString();
           }
@@ -97,7 +100,7 @@ export async function syncUserSubscriptionStatus(email: string): Promise<SyncRes
     }
 
     // 4. 更新数据库
-    const updates: Record<string, any> = {
+    const updates: Record<string, string | null> = {
       subscription_status: newStatus,
       updated_at: new Date().toISOString()
     };
@@ -186,7 +189,7 @@ export async function syncAllUsersSubscriptionStatus(): Promise<{
       results
     };
 
-  } catch (error) {
+  } catch {
     return {
       total: 0,
       success,

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import Stripe from 'stripe';
 import { supabase } from '@/lib/supabase';
 import { errorResponse, successResponse } from '@/lib/api/response';
@@ -115,7 +115,7 @@ export const POST = async (request: NextRequest) => {
       return sub.status === 'active' || sub.status === 'trialing' || sub.status === 'past_due';
     });
 
-    let updates: Record<string, any> = {
+    const updates: Record<string, string | null> = {
       updated_at: new Date().toISOString(),
     };
 
@@ -211,8 +211,12 @@ export const POST = async (request: NextRequest) => {
         created: new Date(sub.created * 1000).toISOString(),
         trial_start: sub.trial_start ? new Date(sub.trial_start * 1000).toISOString() : null,
         trial_end: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
-        current_period_start: (sub as any).current_period_start ? new Date((sub as any).current_period_start * 1000).toISOString() : null,
-        current_period_end: (sub as any).current_period_end ? new Date((sub as any).current_period_end * 1000).toISOString() : null,
+        current_period_start: (sub as Stripe.Subscription & { current_period_start?: number }).current_period_start 
+          ? new Date((sub as Stripe.Subscription & { current_period_start?: number }).current_period_start! * 1000).toISOString() 
+          : null,
+        current_period_end: (sub as Stripe.Subscription & { current_period_end?: number }).current_period_end 
+          ? new Date((sub as Stripe.Subscription & { current_period_end?: number }).current_period_end! * 1000).toISOString() 
+          : null,
       }))
     });
 

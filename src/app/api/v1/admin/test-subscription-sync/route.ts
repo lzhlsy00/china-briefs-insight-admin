@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import Stripe from 'stripe';
 import { supabase } from '@/lib/supabase';
 import { errorResponse, successResponse } from '@/lib/api/response';
@@ -123,7 +123,7 @@ export const POST = async (request: NextRequest) => {
     console.log('更新结果:', { data: updateData, error: updateError });
 
     // 6. 重新查询验证
-    const { data: verifyData, error: verifyError } = await supabase
+    const { data: verifyData } = await supabase
       .from('user_profiles')
       .select('id, email, subscription_status, updated_at, test_updated_at')
       .eq('id', testData.id)

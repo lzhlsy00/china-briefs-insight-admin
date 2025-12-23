@@ -110,9 +110,9 @@ export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageP
   const [showEnglishPreview, setShowEnglishPreview] = useState(false)
   const [showKoreanPreview, setShowKoreanPreview] = useState(false)
   const [pollingTranslations, setPollingTranslations] = useState(false)
-  const { updateNews, fetchNewsById, error, clearError } = useNewsApi()
+  const { updateNews, error, clearError } = useNewsApi()
 
-  const [publishMessage, setPublishMessage] = useState<string | null>(null)
+  const [publishMessage] = useState<string | null>(null)
   const [heroImageError, setHeroImageError] = useState<string | null>(null)
   const [heroImageUploading, setHeroImageUploading] = useState(false)
   const heroImageInputRef = useRef<HTMLInputElement | null>(null)
