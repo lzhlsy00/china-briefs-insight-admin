@@ -109,14 +109,15 @@ export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageP
   const [koreanMessage, setKoreanMessage] = useState<string | null>(null)
   const [showEnglishPreview, setShowEnglishPreview] = useState(false)
   const [showKoreanPreview, setShowKoreanPreview] = useState(false)
-  const { updateNews, error, clearError } = useNewsApi()
+  const [pollingTranslations, setPollingTranslations] = useState(false)
+  const { updateNews, fetchNewsById, error, clearError } = useNewsApi()
 
   const [publishMessage, setPublishMessage] = useState<string | null>(null)
   const [heroImageError, setHeroImageError] = useState<string | null>(null)
   const [heroImageUploading, setHeroImageUploading] = useState(false)
   const heroImageInputRef = useRef<HTMLInputElement | null>(null)
 
-  const anySaving = savingChinese || savingEnglish || savingKorean || heroImageUploading
+  const anySaving = savingChinese || savingEnglish || savingKorean || pollingTranslations || heroImageUploading
 
   useEffect(() => {
     if (newsItem) {
@@ -232,6 +233,41 @@ export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageP
     await uploadHeroImage(file)
   }
 
+  const triggerTranslation = async (newsId: number) => {
+    setPollingTranslations(true)
+    try {
+      console.log('触发翻译 API:', newsId)
+      
+      // 调用翻译 API
+      const response = await fetch(`/api/v1/admin/news/${newsId}/translate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`翻译失败: ${error}`)
+      }
+
+      const result = await response.json()
+      
+      if (result.success && result.data) {
+        // 直接使用返回的翻译结果填充表单
+        populateFormFromNews(result.data)
+        setEnglishMessage('英文内容已自动填充')
+        setKoreanMessage('韩文内容已自动填充')
+        console.log('翻译成功，已填充到表单')
+      } else {
+        throw new Error(result.message || '翻译失败')
+      }
+    } catch (error) {
+      console.error('翻译出错:', error)
+      setFormError('翻译失败: ' + (error instanceof Error ? error.message : '未知错误'))
+    } finally {
+      setPollingTranslations(false)
+    }
+  }
+
   const handleSaveChinese = async (event?: React.FormEvent) => {
     if (event) event.preventDefault()
 
@@ -301,6 +337,7 @@ export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageP
         populateFormFromNews(updated)
         setSuccessMessage('中文内容已保存')
         onSave(updated)
+        void triggerTranslation(newsItem.id)
       }
     } catch (err) {
       console.error('Failed to save Chinese content', err)
@@ -382,7 +419,7 @@ export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageP
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Edit News</h1>
-            <p className="text-gray-600 mt-1">编辑新闻内容。</p>
+            <p className="text-gray-600 mt-1">中文内容保存后即可触发工作流，英文/韩文用于人工审核。</p>
           </div>
           <button
             type="button"
@@ -412,6 +449,12 @@ export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageP
         {successMessage && (
           <div className="mx-6 mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
             <p className="text-green-700 text-sm">{successMessage}</p>
+          </div>
+        )}
+
+        {pollingTranslations && (
+          <div className="mx-6 mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-700">
+            正在等待工作流生成英文/韩文内容...
           </div>
         )}
 
@@ -531,6 +574,11 @@ export default function NewsEditPage({ newsItem, onBack, onSave }: NewsEditPageP
             <div>
               <h2 className="text-lg font-semibold text-gray-900">中文内容</h2>
               <p className="text-sm text-gray-500">录入标题、摘要、分类与 AI 理由后保存以创建/更新记录。</p>
+              {newsItem.translationEn === null && newsItem.translationKo === null && (
+                <p className="text-xs text-amber-600 mt-1">
+                  提示：此新闻尚无翻译内容，保存中文内容后将自动触发翻译。
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">标题 (CN)</label>

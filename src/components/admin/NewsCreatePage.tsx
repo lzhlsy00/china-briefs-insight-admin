@@ -227,32 +227,36 @@ const handleChineseCategoryChange = (value: string) => {
     setStatus(news.status)
   }
 
-  const waitForTranslations = async (newsId: number) => {
+  const triggerTranslation = async (newsId: number) => {
     setPollingTranslations(true)
     try {
-      const hasTranslatedFields = (news: NewsItem) => {
-        const en = (news.titleEn ?? '').trim() || (news.translationEn ?? '').trim()
-        const ko = (news.titleKo ?? '').trim() || (news.translationKo ?? '').trim()
-        return Boolean(en && ko)
+      console.log('触发翻译 API:', newsId)
+      
+      // 调用翻译 API
+      const response = await fetch(`/api/v1/admin/news/${newsId}/translate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`翻译失败: ${error}`)
       }
 
-      const MAX_ATTEMPTS = 40
-      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-        if (attempt > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 3000))
-        }
-        const latest = await fetchNewsById(newsId)
-        if (latest && hasTranslatedFields(latest)) {
-          populateFormFromNews(latest)
-          setEnglishMessage('英文内容已自动填充')
-          setKoreanMessage('韩文内容已自动填充')
-          return
-        }
+      const result = await response.json()
+      
+      if (result.success && result.data) {
+        // 直接使用返回的翻译结果填充表单
+        populateFormFromNews(result.data)
+        setEnglishMessage('英文内容已自动填充')
+        setKoreanMessage('韩文内容已自动填充')
+        console.log('翻译成功，已填充到表单')
+      } else {
+        throw new Error(result.message || '翻译失败')
       }
-      setFormError('自动翻译仍在处理中，请稍后再试或重新保存中文内容')
-    } catch (pollError) {
-      console.error('等待翻译时出错', pollError)
-      setFormError('轮询翻译结果失败')
+    } catch (error) {
+      console.error('翻译出错:', error)
+      setFormError('翻译失败: ' + (error instanceof Error ? error.message : '未知错误'))
     } finally {
       setPollingTranslations(false)
     }
@@ -341,7 +345,7 @@ const handleChineseCategoryChange = (value: string) => {
       if (saved) {
         populateFormFromNews(saved)
         setSuccessMessage('中文内容已保存')
-        void waitForTranslations(saved.id)
+        void triggerTranslation(saved.id)
       }
     } catch (err) {
       console.error('Failed to save Chinese content', err)
@@ -375,7 +379,7 @@ const handleChineseCategoryChange = (value: string) => {
       if (updated) {
         populateFormFromNews(updated)
         setPublishMessage('已切换为发布状态')
-        void waitForTranslations(updated.id)
+        void triggerTranslation(updated.id)
         alert('发布成功')
       }
     } catch (err) {

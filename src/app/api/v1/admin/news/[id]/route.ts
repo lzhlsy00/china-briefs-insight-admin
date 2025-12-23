@@ -38,8 +38,15 @@ const notifyPublishWebhook = async (news: News) => {
   // 如果没有配置 webhook URL，跳过通知
   if (!WEBHOOK_URL) {
     console.warn('⚠️ PUBLISH_WEBHOOK_URL 未配置，跳过 webhook 通知');
+    console.log('请检查环境变量 PUBLISH_WEBHOOK_URL 是否已设置');
     return;
   }
+  
+  console.log('准备调用翻译 webhook:', {
+    url: WEBHOOK_URL,
+    newsId: news.id,
+    title: news.title
+  })
 
   try {
     const response = await fetch(WEBHOOK_URL, {
@@ -73,11 +80,15 @@ const notifyPublishWebhook = async (news: News) => {
     });
 
     if (!response.ok) {
+      const responseText = await response.text();
       console.error(
         `发布状态 webhook 调用失败: ${response.status} ${response.statusText}`,
+        '\n响应内容:', responseText
       );
     } else {
       console.log(`✅ Webhook 通知成功: News ID ${news.id} 已发布`);
+      const responseText = await response.text();
+      console.log('Webhook 响应内容:', responseText);
     }
   } catch (error) {
     console.error('发布状态 webhook 调用异常:', error);
@@ -201,12 +212,24 @@ export const PUT = async (request: NextRequest, context: RouteContext) => {
     }
 
     // 检查是否需要触发 webhook
-    if (
-      existing.status !== 'PUBLISH' &&
-      updated.status === 'PUBLISH' &&
-      (!existing['title-en'] || existing['title-en'].trim().length === 0) &&
-      (!existing['title-ko'] || existing['title-ko'].trim().length === 0)
-    ) {
+    // 触发条件：中文内容（标题、内容、分类、AI理由）有任何更新
+    const chineseFieldsChanged = 
+      existing.title !== updated.title ||
+      existing.content !== updated.content ||
+      existing.category !== updated.category ||
+      existing.ai_reason !== updated.ai_reason;
+    
+    // 如果中文内容有更新，就触发翻译工作流（无论是否已有翻译）
+    if (chineseFieldsChanged) {
+      console.log('中文内容已更新，触发翻译 webhook:', { 
+        newsId: id, 
+        changes: {
+          title: existing.title !== updated.title,
+          content: existing.content !== updated.content,
+          category: existing.category !== updated.category,
+          aiReason: existing.ai_reason !== updated.ai_reason
+        }
+      });
       await notifyPublishWebhook(updated as News);
     }
 

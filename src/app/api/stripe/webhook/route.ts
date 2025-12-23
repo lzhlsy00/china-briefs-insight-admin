@@ -267,6 +267,14 @@ const handleInvoicePaymentSucceeded = async (invoice: Stripe.Invoice) => {
 
 
 const handleSubscriptionUpdated = async (subscription: Stripe.Subscription) => {
+  console.log('处理订阅更新事件:', {
+    subscriptionId: subscription.id,
+    status: subscription.status,
+    customerId: subscription.customer,
+    trialStart: subscription.trial_start,
+    trialEnd: subscription.trial_end,
+  });
+
   const resolved = await resolveUserFromSubscription(subscription);
   if (!resolved) {
     console.warn('Unable to resolve user for subscription update', { subscriptionId: subscription.id });
@@ -275,21 +283,37 @@ const handleSubscriptionUpdated = async (subscription: Stripe.Subscription) => {
 
   const { userId } = resolved;
   const derivedStatus = deriveSubscriptionStatus(subscription);
+  
+  console.log('更新用户订阅状态:', {
+    userId,
+    subscriptionStatus: subscription.status,
+    derivedStatus,
+  });
+
   const updates: Record<string, unknown> = {
     subscription_status: derivedStatus,
     updated_at: new Date().toISOString(),
   };
 
   const extendedSubscription = subscription as Stripe.Subscription & { current_period_start?: number; current_period_end?: number };
-  const periodStart = toIso(extendedSubscription.current_period_start);
-  const periodEnd = toIso(extendedSubscription.current_period_end);
-
-  if (periodStart) {
-    updates.current_period_start = periodStart;
-  }
-
-  if (periodEnd) {
-    updates.current_period_end = periodEnd;
+  
+  // 处理试用期
+  if (subscription.status === 'trialing' && subscription.trial_start && subscription.trial_end) {
+    updates.current_period_start = toIso(subscription.trial_start);
+    updates.current_period_end = toIso(subscription.trial_end);
+    console.log('订阅处于试用期，使用试用期时间');
+  } else {
+    // 正常订阅期
+    const periodStart = toIso(extendedSubscription.current_period_start);
+    const periodEnd = toIso(extendedSubscription.current_period_end);
+    
+    if (periodStart) {
+      updates.current_period_start = periodStart;
+    }
+    
+    if (periodEnd) {
+      updates.current_period_end = periodEnd;
+    }
   }
 
   const { error } = await supabase
