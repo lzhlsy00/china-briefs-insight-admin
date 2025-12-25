@@ -14,7 +14,13 @@ export const POST = async (request: NextRequest) => {
     const diagnoses = [];
     
     for (const email of emails.slice(0, 10)) { // 限制最多检查10个
-      const diagnosis: Record<string, unknown> = {
+      const diagnosis: {
+        email: string;
+        issues: string[];
+        recommendations: string[];
+        locale_matching?: { would_receive: boolean }[];
+        [key: string]: unknown;
+      } = {
         email,
         issues: [],
         recommendations: []
@@ -160,7 +166,7 @@ export const POST = async (request: NextRequest) => {
           };
         });
         
-        const mismatchCount = diagnosis.locale_matching.filter(m => !m.would_receive).length;
+        const mismatchCount = diagnosis.locale_matching?.filter(m => !m.would_receive).length ?? 0;
         if (mismatchCount > 0) {
           diagnosis.issues.push(`最近 ${mismatchCount} 封邮件因语言不匹配而未发送`);
           diagnosis.recommendations.push('检查用户语言设置是否正确');

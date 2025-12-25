@@ -7,7 +7,7 @@ export default function EmailTestPage() {
   const [locale, setLocale] = useState<'EN' | 'KO'>('EN')
   const [testType, setTestType] = useState<'resend' | 'full'>('resend')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<unknown>(null)
+  const [result, setResult] = useState<Record<string, unknown> | null>(null)
   const [error, setError] = useState('')
 
   const runTest = async () => {

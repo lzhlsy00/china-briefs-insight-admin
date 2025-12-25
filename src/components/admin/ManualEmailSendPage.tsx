@@ -10,6 +10,20 @@ interface PushContent {
   date: string
 }
 
+interface SendResult {
+  results?: {
+    attempted: number
+    delivered: number
+    failed: number
+    failures?: Array<{
+      email: string
+      error: string
+      details?: unknown
+    }>
+  }
+  [key: string]: unknown
+}
+
 export default function ManualEmailSendPage() {
   const [contents, setContents] = useState<PushContent[]>([])
   const [selectedContent, setSelectedContent] = useState<number | null>(null)
@@ -18,7 +32,7 @@ export default function ManualEmailSendPage() {
   const [forceResend, setForceResend] = useState(false)
   const [specificEmails, setSpecificEmails] = useState('')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<unknown>(null)
+  const [result, setResult] = useState<SendResult | null>(null)
   const [error, setError] = useState('')
 
   // 加载推送内容列表
@@ -226,7 +240,7 @@ export default function ManualEmailSendPage() {
                       <div key={idx} className="p-2 bg-red-50 rounded text-sm">
                         <p><strong>{failure.email}</strong></p>
                         <p className="text-red-600">{failure.error}</p>
-                        {failure.details && (
+                        {failure.details != null && (
                           <pre className="mt-1 text-xs overflow-x-auto">
                             {JSON.stringify(failure.details, null, 2)}
                           </pre>
