@@ -193,25 +193,76 @@ export default function PushContentPage() {
       return
     }
 
+    if (!window.confirm('确定要推送这条内容给所有订阅用户吗？')) {
+      return
+    }
+
     setError(null)
     setSuccess(null)
     setSendingId(id)
 
     try {
-      const response = await fetch(`/api/v1/admin/push-content/${id}/send`, {
-        method: 'POST',
-      })
+      let offset = 0
+      const batchSize = 10
+      let totalSent = 0
+      let totalRecipients = 0
 
-      const responseText = await response.text()
-      const body = responseText
-        ? (JSON.parse(responseText) as { success?: boolean; message?: string })
-        : { success: response.ok }
+      // 循环调用批量发送 API 直到所有用户都收到
+      while (true) {
+        const response = await fetch('/api/v1/admin/batch-email-send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contentId: id,
+            offset,
+            batchSize,
+            testMode: false,
+            ignoreLocale: false,
+            forceResend: false,
+          }),
+        })
 
-      if (!response.ok || body.success === false) {
-        throw new Error(body.message || '推送失败')
+        const body = await response.json() as {
+          success?: boolean
+          message?: string
+          data?: {
+            completed?: boolean
+            progress?: { sent: number; total: number }
+            next?: { offset: number } | null
+            batch?: { results?: { delivered: number; failed: number } }
+          }
+        }
+
+        if (!response.ok || body.success === false) {
+          throw new Error(body.message || '推送失败')
+        }
+
+        const data = body.data
+        if (data?.progress) {
+          totalSent = data.progress.sent
+          totalRecipients = data.progress.total
+          setSuccess(`正在发送... ${totalSent}/${totalRecipients}`)
+        }
+
+        // 如果完成或者没有下一批，退出循环
+        if (data?.completed || !data?.next) {
+          break
+        }
+
+        offset = data.next.offset
+
+        // 避免发送过快，每批之间等待 1 秒
+        await new Promise((resolve) => setTimeout(resolve, 1000))
       }
 
-      setSuccess(body.message ?? '推送任务已触发')
+      setSuccess(`推送完成！成功发送 ${totalSent}/${totalRecipients} 封邮件`)
+
+      // 刷新记录状态
+      setRecords((prev) =>
+        prev.map((record) =>
+          record.id === id ? { ...record, published: true } : record
+        )
+      )
     } catch (sendError) {
       const messageText = sendError instanceof Error ? sendError.message : '推送失败'
       setError(messageText)
