@@ -21,6 +21,14 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
   const [categoryOptions, setCategoryOptions] = useState<Array<{ value: string; label: string }>>([])
   const [pageInput, setPageInput] = useState<string>('1')
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
+
+  // 批量选择相关状态
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [daysFilter, setDaysFilter] = useState<number>(10)
+  const [batchDeleting, setBatchDeleting] = useState(false)
+  const [prevAiFilter, setPrevAiFilter] = useState<'ALL' | 'TRUE' | 'FALSE'>('ALL')
+  const [autoDeleting, setAutoDeleting] = useState(false)
   
   const { 
     newsList, 
@@ -399,7 +407,223 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
     })
   }
 
-  const isActionDisabled = loading || deletingId !== null || statusUpdatingId !== null
+  // 进入选择模式
+  const handleEnterSelectionMode = () => {
+    setPrevAiFilter(aiFilter)
+    setSelectionMode(true)
+    setSelectedIds(new Set())
+    // 自动筛选 AI worth 为 false 的数据
+    setAiFilter('FALSE')
+    // 计算时间筛选的日期：N天前表示筛选日期 <= (今天 - N天) 的内容
+    const dateTo = new Date()
+    dateTo.setDate(dateTo.getDate() - daysFilter)
+    dateTo.setHours(23, 59, 59, 999) // 设置为当天结束时间
+    updateParams({
+      page: 1,
+      aiWorth: false,
+      dateTo: dateTo.toISOString(),
+    })
+  }
+
+  // 退出选择模式
+  const handleExitSelectionMode = () => {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+    // 恢复之前的筛选条件
+    setAiFilter(prevAiFilter)
+    updateParams({
+      page: 1,
+      aiWorth: prevAiFilter === 'ALL' ? undefined : prevAiFilter === 'TRUE',
+      dateTo: undefined,
+    })
+  }
+
+  // 时间筛选变更
+  const handleDaysFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const days = Number(event.target.value)
+    setDaysFilter(days)
+    // N天前表示筛选日期 <= (今天 - N天) 的内容
+    const dateTo = new Date()
+    dateTo.setDate(dateTo.getDate() - days)
+    dateTo.setHours(23, 59, 59, 999) // 设置为当天结束时间
+    updateParams({
+      page: 1,
+      dateTo: dateTo.toISOString(),
+    })
+  }
+
+  // 切换单个选择
+  const handleToggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  // 全选当前页
+  const handleSelectAll = () => {
+    const currentPageIds = filteredNewsList.map((item) => item.id)
+    const allSelected = currentPageIds.every((id) => selectedIds.has(id))
+
+    if (allSelected) {
+      // 取消全选
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        currentPageIds.forEach((id) => next.delete(id))
+        return next
+      })
+    } else {
+      // 全选
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        currentPageIds.forEach((id) => next.add(id))
+        return next
+      })
+    }
+  }
+
+  // 批量删除
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) {
+      alert('请先选择要删除的新闻')
+      return
+    }
+
+    if (!confirm(`确定要删除选中的 ${selectedIds.size} 条新闻吗？此操作不可恢复！`)) {
+      return
+    }
+
+    setBatchDeleting(true)
+    try {
+      const idsToDelete = Array.from(selectedIds)
+      let successCount = 0
+      let failCount = 0
+
+      for (const id of idsToDelete) {
+        try {
+          await deleteNews(id)
+          successCount++
+        } catch (err) {
+          console.error(`Delete news ${id} failed:`, err)
+          failCount++
+        }
+      }
+
+      setSelectedIds(new Set())
+      refreshNews()
+
+      if (failCount > 0) {
+        alert(`删除完成：成功 ${successCount} 条，失败 ${failCount} 条`)
+      } else {
+        alert(`成功删除 ${successCount} 条新闻`)
+      }
+    } catch (err) {
+      console.error('Batch delete failed:', err)
+      alert('批量删除失败')
+    } finally {
+      setBatchDeleting(false)
+    }
+  }
+
+  // 计算当前页是否全选
+  const isAllSelected = useMemo(() => {
+    if (filteredNewsList.length === 0) return false
+    return filteredNewsList.every((item) => selectedIds.has(item.id))
+  }, [filteredNewsList, selectedIds])
+
+  // 自动清除10天前的 AI worth 为 false 的内容
+  const handleAutoDelete = async () => {
+    if (!confirm('确定要自动清除10天前且 AI Worth 为 False 的所有新闻吗？此操作不可恢复！')) {
+      return
+    }
+
+    setAutoDeleting(true)
+    try {
+      // 计算10天前的日期
+      const dateTo = new Date()
+      dateTo.setDate(dateTo.getDate() - 10)
+      dateTo.setHours(23, 59, 59, 999)
+
+      // 先获取总数
+      const countResponse = await fetch(
+        `/api/v1/admin/news?aiWorth=false&dateTo=${dateTo.toISOString()}&limit=1&page=1`
+      )
+      const countResult = await countResponse.json()
+
+      if (!countResult.success) {
+        throw new Error(countResult.message || '获取新闻列表失败')
+      }
+
+      const totalCount = countResult.data?.pagination?.totalCount || 0
+
+      if (totalCount === 0) {
+        alert('没有找到需要清除的新闻')
+        return
+      }
+
+      if (!confirm(`找到 ${totalCount} 条符合条件的新闻，确定全部删除吗？`)) {
+        return
+      }
+
+      let successCount = 0
+      let failCount = 0
+      const limit = 50
+
+      // 循环获取并删除所有符合条件的新闻（始终获取第一页，因为删除后数据会前移）
+      while (true) {
+        const response = await fetch(
+          `/api/v1/admin/news?aiWorth=false&dateTo=${dateTo.toISOString()}&limit=${limit}&page=1`
+        )
+        const result = await response.json()
+
+        if (!result.success || !result.data?.news) {
+          break
+        }
+
+        const newsToDelete = result.data.news as Array<{ id: number }>
+
+        if (newsToDelete.length === 0) {
+          break
+        }
+
+        for (const news of newsToDelete) {
+          try {
+            await deleteNews(news.id)
+            successCount++
+          } catch (err) {
+            console.error(`Delete news ${news.id} failed:`, err)
+            failCount++
+          }
+        }
+
+        // 因为删除后数据会减少，所以始终获取第一页
+        // 如果没有更多数据了就退出
+        if (newsToDelete.length < limit) {
+          break
+        }
+      }
+
+      refreshNews()
+
+      if (failCount > 0) {
+        alert(`自动清除完成：成功 ${successCount} 条，失败 ${failCount} 条`)
+      } else {
+        alert(`成功清除 ${successCount} 条新闻`)
+      }
+    } catch (err) {
+      console.error('Auto delete failed:', err)
+      alert('自动清除失败：' + (err instanceof Error ? err.message : '未知错误'))
+    } finally {
+      setAutoDeleting(false)
+    }
+  }
+
+  const isActionDisabled = loading || deletingId !== null || statusUpdatingId !== null || batchDeleting || autoDeleting
   const isPageJumpDisabled = isActionDisabled || !pagination
   const getTimeArrowClass = (direction: 'up' | 'down') => {
     const isUp = direction === 'up'
@@ -575,6 +799,84 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
             </div>
           </div>
         </div>
+
+        {/* 批量选择功能栏 */}
+        <div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+          <div className="flex flex-wrap gap-4 items-center">
+            <span className="text-sm font-medium text-gray-700">管理历史数据</span>
+            {!selectionMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleEnterSelectionMode}
+                  disabled={isActionDisabled}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  选择
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAutoDelete}
+                  disabled={isActionDisabled}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {autoDeleting ? '清除中...' : '自动清除10天前'}
+                </button>
+              </>
+            ) : (
+              <>
+                <label className="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={handleSelectAll}
+                    disabled={isActionDisabled || filteredNewsList.length === 0}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">全部</span>
+                </label>
+
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-700">时间筛选</span>
+                  <select
+                    value={daysFilter}
+                    onChange={handleDaysFilterChange}
+                    disabled={isActionDisabled}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  >
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map((days) => (
+                      <option key={days} value={days}>
+                        {days}天前
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <span className="text-sm text-gray-600">
+                  已选择 <span className="font-semibold text-blue-600">{selectedIds.size}</span> 条
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleBatchDelete}
+                  disabled={isActionDisabled || selectedIds.size === 0}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {batchDeleting ? '删除中...' : '删除'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExitSelectionMode}
+                  disabled={batchDeleting}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  取消选择
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
       <div className="overflow-x-auto">
         {loading && (
@@ -587,6 +889,11 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                {selectionMode && (
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                    <span className="sr-only">选择</span>
+                  </th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Title
                 </th>
@@ -620,7 +927,7 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredNewsList.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={selectionMode ? 6 : 5} className="px-6 py-8 text-center text-gray-500">
                     No data available
                   </td>
                 </tr>
@@ -628,8 +935,20 @@ export default function NewsTable({ onEditNews, refreshSignal }: NewsTableProps)
                 filteredNewsList.map((news) => {
                   const displayFields = getDisplayFields(news)
                   const preview = getContentPreview(displayFields.content)
+                  const isSelected = selectedIds.has(news.id)
                   return (
-                  <tr key={news.id} className="hover:bg-gray-50 transition-colors duration-200">
+                  <tr key={news.id} className={`hover:bg-gray-50 transition-colors duration-200 ${isSelected ? 'bg-blue-50' : ''}`}>
+                    {selectionMode && (
+                      <td className="px-4 py-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelect(news.id)}
+                          disabled={isActionDisabled}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+                        />
+                      </td>
+                    )}
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900 line-clamp-2">
                         {displayFields.title}

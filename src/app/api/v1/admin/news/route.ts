@@ -14,6 +14,8 @@ const querySchema = z.object({
   title: z.string().min(1).max(1000).optional(),
   aiWorth: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
   language: z.enum(['EN', 'KO']).optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
   sortBy: z.enum(['id', 'title', 'isoDate', 'category', 'status', 'aiWorth']).default('id'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   secondarySortBy: z.enum(['id', 'title', 'isoDate', 'category', 'status', 'aiWorth']).optional(),
@@ -241,6 +243,12 @@ export const GET = async (request: NextRequest) => {
       supabaseQuery = supabaseQuery
         .not('title-ko', 'is', null)
         .neq('title-ko', '');
+    }
+    if (query.dateFrom) {
+      supabaseQuery = supabaseQuery.gte('iso_date', query.dateFrom);
+    }
+    if (query.dateTo) {
+      supabaseQuery = supabaseQuery.lte('iso_date', query.dateTo);
     }
 
     // 排序

@@ -80,6 +80,8 @@ export interface NewsListParams extends Record<string, string | number | boolean
   title?: string;
   aiWorth?: boolean;
   language?: 'EN' | 'KO';
+  dateFrom?: string;
+  dateTo?: string;
   sortBy?: 'id' | 'title' | 'isoDate' | 'category' | 'status' | 'aiWorth';
   sortOrder?: 'asc' | 'desc';
   secondarySortBy?: 'id' | 'title' | 'isoDate' | 'category' | 'status' | 'aiWorth';
