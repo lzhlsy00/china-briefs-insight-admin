@@ -142,7 +142,20 @@ export const POST = async (request: NextRequest) => {
     if (contentError || !content) {
       return errorResponse('内容不存在');
     }
-    
+
+    // 始终使用激活模板的 logo（优先级高于 push_content 中存储的值）
+    const { data: activeTemplate } = await supabase
+      .from('template')
+      .select('logo')
+      .eq('is_active', true)
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (activeTemplate?.logo) {
+      content.logo = activeTemplate.logo;
+    }
+
     // 2. 获取已发送记录
     const { data: alreadySent } = await supabase
       .from('send_email')
