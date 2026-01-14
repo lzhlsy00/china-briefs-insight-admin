@@ -257,6 +257,17 @@ export default function PushContentPage() {
 
       setSuccess(`推送完成！成功发送 ${totalSent}/${totalRecipients} 封邮件`)
 
+      // 调用 API 更新数据库中的 published 状态
+      const updateResponse = await fetch(`/api/v1/admin/push-content/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ published: true }),
+      })
+
+      if (!updateResponse.ok) {
+        console.error('更新 published 状态失败')
+      }
+
       // 刷新记录状态
       setRecords((prev) =>
         prev.map((record) =>
