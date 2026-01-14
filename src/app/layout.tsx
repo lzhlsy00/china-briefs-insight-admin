@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FortuneNews Admin",
-  description: "FortuneNews content management console",
+  title: "BiteChina Management System",
+  description: "BiteChina content management console",
 };
 
 export default function RootLayout({

@@ -85,7 +85,7 @@ export default function AdminSidebar() {
       {/* 顶部Logo */}
       <div className="p-6 border-b border-gray-800">
         <Link href="/admin" className="block">
-          <div className="text-2xl font-bold text-white">FortuneNews</div>
+          <div className="text-2xl font-bold text-white">BiteChina</div>
         </Link>
       </div>
 

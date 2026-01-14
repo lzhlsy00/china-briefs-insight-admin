@@ -54,7 +54,7 @@ export default function LoginPage() {
             Admin Login
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            FortuneNews Management System
+            BiteChina Management System
           </p>
         </div>
         

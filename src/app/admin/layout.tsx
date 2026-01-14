@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "FortuneNews Admin",
-  description: "Manage FortuneNews content",
+  title: "BiteChina Management System",
+  description: "Manage BiteChina content",
 };
 
 export default function AdminLayout({
