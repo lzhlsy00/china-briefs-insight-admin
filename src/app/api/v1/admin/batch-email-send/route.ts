@@ -12,6 +12,7 @@ const sendSingleEmail = async (
   const emailFrom = process.env.RESEND_EMAIL_FROM;
   
   if (!resendApiKey || !emailFrom) {
+    console.error(`[配置缺失] RESEND_API_KEY: ${resendApiKey ? '已设置' : '未设置'}, RESEND_EMAIL_FROM: ${emailFrom ? '已设置' : '未设置'}`);
     return { success: false, error: 'Resend 配置缺失' };
   }
   
@@ -32,15 +33,51 @@ const sendSingleEmail = async (
     <meta charset="utf-8" />
     <title>${subject}</title>
   </head>
-  <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1>${content.title || subject}</h1>
-      <div style="background: #f1f5f9; padding: 20px; border-radius: 8px; margin-top: 20px;">
-        ${renderedContent}
-        ${content.banner ? `<div style="margin-top: 20px;">${content.banner}</div>` : ''}
-        ${content.footer ? `<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;">${content.footer}</div>` : ''}
-      </div>
-    </div>
+  <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937; margin: 0; padding: 0; background-color: #f8fafc;">
+    <table width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 24px 0;">
+      <tr>
+        <td align="center">
+          <table width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; box-shadow: 0 10px 35px rgba(15, 23, 42, 0.08); overflow: hidden;">
+            ${content.logo ? `
+            <tr>
+              <td style="padding: 32px 32px 16px 32px; text-align: center;">
+                <img src="${content.logo}" alt="BiteChina" style="max-width: 180px; height: auto;" />
+              </td>
+            </tr>
+            ` : ''}
+            <tr>
+              <td style="padding: 16px 32px 8px 32px; text-align: center;">
+                <h1 style="font-size: 24px; font-weight: 700; margin: 0; color: #0f172a;">${content.title || subject}</h1>
+              </td>
+            </tr>
+            ${content.subject ? `
+            <tr>
+              <td style="padding: 0 32px 16px 32px; text-align: center;">
+                <p style="font-size: 14px; color: #64748b; margin: 0; line-height: 1.5;">${content.subject.replace(/[\r\n]+/g, '<br />')}</p>
+              </td>
+            </tr>
+            ` : ''}
+            <tr>
+              <td style="padding: 0 32px 32px 32px;">
+                <div style="border-radius: 12px; background: #f1f5f9; color: #0f172a; padding: 24px; font-size: 16px; line-height: 1.7;">
+                  ${renderedContent}
+                </div>
+                ${content.banner ? `
+                <div style="margin-top: 24px; padding: 16px; background: #e0f2fe; border-radius: 8px; font-size: 14px; color: #0369a1;">
+                  ${content.banner.replace(/\n/g, '<br />')}
+                </div>
+                ` : ''}
+                ${content.footer ? `
+                <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #64748b; text-align: center;">
+                  ${content.footer.replace(/\n/g, '<br />')}
+                </div>
+                ` : ''}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>`;
   
@@ -61,17 +98,19 @@ const sendSingleEmail = async (
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
-      return { 
-        success: false, 
-        error: errorData?.message || `HTTP ${response.status}` 
+      console.error(`[Resend 错误] ${email}:`, errorData);
+      return {
+        success: false,
+        error: errorData?.message || `HTTP ${response.status}`
       };
     }
     
     return { success: true };
   } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : String(error) 
+    console.error(`[发送异常] ${email}:`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     };
   }
 };
@@ -185,6 +224,7 @@ export const POST = async (request: NextRequest) => {
         results.delivered++;
       } else {
         results.failed++;
+        console.error(`[批量发送] 发送失败 ${email}: ${result.error}`);
         results.failures.push({
           email,
           error: result.error || 'Unknown error'
@@ -192,13 +232,17 @@ export const POST = async (request: NextRequest) => {
       }
       
       // 记录到数据库
-      await supabase
+      const { error: dbError } = await supabase
         .from('send_email')
         .insert({
           mail_content_id: contentId,
           user_mail: email,
           is_delivered: result.success,
         });
+
+      if (dbError) {
+        console.error(`[批量发送] 数据库记录失败 ${email}:`, dbError);
+      }
     }
     
     // 7. 计算下一批次

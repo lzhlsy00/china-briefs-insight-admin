@@ -114,19 +114,41 @@ export const POST = async (request: NextRequest) => {
       <tr>
         <td align="center">
           <table width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; box-shadow: 0 10px 35px rgba(15, 23, 42, 0.08); overflow: hidden;">
+            ${content.logo ? `
             <tr>
               <td style="padding: 32px 32px 16px 32px; text-align: center;">
-                <h1 style="font-size: 28px; font-weight: 700; margin: 0; color: #0f172a;">${content.title || subject}</h1>
+                <img src="${content.logo}" alt="BiteChina" style="max-width: 180px; height: auto;" />
+              </td>
+            </tr>
+            ` : ''}
+            <tr>
+              <td style="padding: 16px 32px 8px 32px; text-align: center;">
+                <h1 style="font-size: 24px; font-weight: 700; margin: 0; color: #0f172a;">${content.title || subject}</h1>
                 ${testMode ? '<p style="color: #dc2626; font-size: 14px; margin: 8px 0;">⚠️ 测试邮件</p>' : ''}
               </td>
             </tr>
+            ${content.subject ? `
+            <tr>
+              <td style="padding: 0 32px 16px 32px; text-align: center;">
+                <p style="font-size: 14px; color: #64748b; margin: 0; line-height: 1.5;">${content.subject.replace(/[\r\n]+/g, '<br />')}</p>
+              </td>
+            </tr>
+            ` : ''}
             <tr>
               <td style="padding: 0 32px 32px 32px;">
                 <div style="border-radius: 12px; background: #f1f5f9; color: #0f172a; padding: 24px; font-size: 16px; line-height: 1.7;">
                   ${renderedContent}
-                  ${content.banner ? `<div style="margin-top: 24px;">${content.banner}</div>` : ''}
-                  ${content.footer ? `<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">${content.footer}</div>` : ''}
                 </div>
+                ${content.banner ? `
+                <div style="margin-top: 24px; padding: 16px; background: #e0f2fe; border-radius: 8px; font-size: 14px; color: #0369a1;">
+                  ${content.banner.replace(/\n/g, '<br />')}
+                </div>
+                ` : ''}
+                ${content.footer ? `
+                <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #64748b; text-align: center;">
+                  ${content.footer.replace(/\n/g, '<br />')}
+                </div>
+                ` : ''}
               </td>
             </tr>
           </table>

@@ -59,7 +59,7 @@ const sendSingleEmail = async (
       <h1>${content.title || subject}</h1>
       <div style="background: #f1f5f9; padding: 20px; border-radius: 8px; margin-top: 20px;">
         ${renderedContent}
-        ${content.banner ? `<div style="margin-top: 20px;">${content.banner}</div>` : ''}
+        ${content.banner ? `<div style="margin-top: 20px;">${content.banner.replace(/\n/g, '<br />')}</div>` : ''}
         ${content.footer ? `<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;">${content.footer}</div>` : ''}
       </div>
       <p style="margin-top: 20px; color: #64748b; font-size: 14px;">
