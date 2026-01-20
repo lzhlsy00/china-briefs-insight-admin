@@ -37,6 +37,7 @@ type TemplateRow = {
 };
 
 const normalize = (value: string | null | undefined) => value?.replace(/\s+/g, ' ').trim() ?? '';
+
 const requireOpenAIBaseUrl = () => {
   if (!OPENAI_BASE_URL) {
     throw new Error('OPENAI_API_BASE 未配置，无法调用翻译服务');
@@ -60,17 +61,20 @@ const localeHelpers: Record<
     fallbackTitle: (id: number) => string;
     fallbackSummary: string;
     callToAction: string;
+    readMore: string;
   }
 > = {
   EN: {
     fallbackTitle: (id: number) => `Story ${id}`,
     fallbackSummary: 'Summary pending translation. Please review the full article.',
     callToAction: '👉 Full article',
+    readMore: 'Read more',
   },
   KO: {
     fallbackTitle: (id: number) => `스토리 ${id}`,
     fallbackSummary: '요약을 준비 중입니다. 전체 기사를 확인하세요.',
     callToAction: '👉 전체 기사 보기',
+    readMore: '더보기',
   },
 };
 
@@ -149,21 +153,13 @@ const formatDigest = (
   }
 
   const helper = localeHelpers[locale];
-  const formatLinkForDisplay = (url: string) => {
-    try {
-      return decodeURIComponent(url);
-    } catch {
-      return url;
-    }
-  };
 
   return entries
     .map((entry, index) => {
-      const linkText = entry.link ? formatLinkForDisplay(entry.link) : '';
       const lines = [
         `🔹 ${index + 1}. ${entry.title}`,
         entry.summary,
-        entry.link ? `${helper.callToAction}: <a href="${entry.link}" style="color: #3b82f6; text-decoration: underline;">${linkText}</a>` : helper.callToAction,
+        entry.link ? `${helper.callToAction}: <a href="${entry.link}" style="color: #3b82f6; text-decoration: underline;">${helper.readMore}</a>` : helper.callToAction,
       ];
       return lines.join('\n');
     })

@@ -158,10 +158,15 @@ export const POST = async (request: NextRequest) => {
                 </div>
                 ` : ''}
                 ${content.footer ? `
-                <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #64748b; text-align: center;">
+                <div style="margin-top: 32px; padding: 20px; background: #f8fafc; border-radius: 8px; font-size: 14px; color: #475569;">
                   ${content.footer.replace(/\n/g, '<br />')}
                 </div>
                 ` : ''}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 16px 32px; text-align: center; font-size: 11px; color: #94a3b8;">
+                Sent on ${new Date().toISOString().slice(0, 19).replace('T', ' ')} UTC
               </td>
             </tr>
           </table>
